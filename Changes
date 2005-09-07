@@ -1,0 +1,6 @@
+Revision history for Perl extension Net::UPS.
+
+0.01  Tue May  4 17:51:08 2004
+	- original version; created by h2xs 1.21 with options
+		-A -X -n Net::UPS
+
