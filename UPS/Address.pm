@@ -1,6 +1,6 @@
 package Net::UPS::Address;
 
-# $Id: Address.pm,v 1.3 2005/09/06 05:04:21 sherzodr Exp $
+# $Id: Address.pm,v 1.4 2005/09/11 05:05:25 sherzodr Exp $
 
 =head1 NAME
 
@@ -125,7 +125,10 @@ sub as_XML {
 
 
 
-
+#
+# used as a cache key
+#
+sub cache_id { return $_[0]->postal_code }
 
 
 

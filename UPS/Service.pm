@@ -1,6 +1,6 @@
 package Net::UPS::Service;
 
-# $Id: Service.pm,v 1.2 2005/09/07 00:09:14 sherzodr Exp $
+# $Id: Service.pm,v 1.3 2005/09/11 05:05:25 sherzodr Exp $
 
 =head1 NAME
 
@@ -129,6 +129,19 @@ sub new_from_label {
     return $class->new(code=>$code, label=>$label);
 }
 
+
+sub name {
+    my $self = shift;
+    unless ( $self->label ) {
+        return "UNKNOWN";
+    }
+    my $name = $self->label();
+    $name =~ s/_/ /g;
+    return $name;
+}
+
+
+sub cache_id { $_[0]->code }
 
 1;
 

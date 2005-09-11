@@ -1,11 +1,12 @@
 # http://module-build.sourceforge.net/META-spec.html
 #XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
 name:         Net-UPS
-version:      0.01_01
+version:      0.02
 version_from: UPS.pm
 installdirs:  site
 requires:
     Class::Struct:                 0.58
+    Crypt::SSLeay:                 
     LWP::UserAgent:                
     XML::Simple:                   
 

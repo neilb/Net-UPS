@@ -8,6 +8,7 @@ WriteMakefile(
         'LWP::UserAgent'    => undef,
         'XML::Simple'       => undef,
         'Class::Struct'     => 0.58,
+        'Crypt::SSLeay'     => undef,
     
     }, # e.g., Module::Name => 1.1
     ($] >= 5.005 ?    ## Add these new keywords supported since 5.005

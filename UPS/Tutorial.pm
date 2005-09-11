@@ -9,7 +9,7 @@ $Net::UPS::Tutorial::VERSION = '1.00';
 
 =head1 NAME
 
-Net::UPS - Simple class implementing UPSOnlineTools API
+Net::UPS::Tutorial - Simple class implementing UPSOnlineTools API
 
 =head1 SYNOPSIS
 
@@ -44,9 +44,11 @@ To be able to make use of this library in your e-commerce environment, you first
 
 =head1 PROGRAMMING STYLE
 
+This manual is meant to be a step-by-step tutorial on Programming with Net::UPS, and might not cover all the methods supported by the library. For a reference of methods consider L<Net::UPS|Net::UPS>.
+
 =head2 OVERVIEW
 
-Programming style of Net::UPS is somewhat straightforward. For example, for I<Rates and Services> API, you first have to prepare your package, define shipper's and recipients's address, and calculate the rate. For I<Address Verification>, you have to prepare the address to be verified, and you have to submit it for verification.
+Programming style of Net::UPS is somewhat straightforward. For example, for I<Rates and Services> API, you first have to prepare your package, define shipper's and recipients's address, and submit request. For I<Address Verification>, you have to prepare the address to be verified, and you have to submit it for verification.
 
 In true e-commerce environment, you usually use more than one of these APIs at the same time. For example, during a checkout, customer may be prompted for a shipping address, because without this you will not be able to provide the customer the most accurate shipping and handling charge. Once you have customer's shipping address, you may want to verify the address using UPS Address Verification Service. If address verifies, you create a package out of the customer's shopping cart, and submit it back to UPS to calculate the rates, or get the list of rates and services available from your address to that of the customer.
 
@@ -74,7 +76,7 @@ By default Net::UPS uses English system of measurement. If you want to use metri
 
 Now all the length units are in centimeters, and weight is measured in KG.
 
-You can prepare multiple packages. Just repeat the above procedure for all the packages, before you request a rate from UPS. By doing so you save network resources. For limits on number of packages submitted at single request consult with UPS Online Tools API, for Net::UPS doesn not enforce any limit.
+You can prepare multiple packages. Just repeat the above procedure for all the packages, before you request a rate from UPS. By doing so you save network resources. For limits on number of packages submitted at single request consult with UPS Online Tools API, for Net::UPS does not enforce any limit.
 
 Before you can submit your package for a rate quote,  you have to prepare two more objects, Shipper's (Your) address, and Recipients's (the customer's) address. That's where Net::UPS::Address comes in.
 
@@ -90,7 +92,7 @@ Alternatively, $zip_from and $zip_to can be replaced with instances of Net::UPS:
 
 If C<rate()> fails, it returns undef. Reason for failure can be found by calling $ups->errstr.
 
-Return value of C<rate()> is an instance of Net::UPS::Rate class. If you passed more than one package, it returns a list of Net::UPS::Rate instances, one for each package. The order of the rates returned correspond to the order of the packages. If you prefer to loose track of the order of packages, you can alternatively consult C<rated_package> accessor of Net::UPS::Rate to get to the instance of rated Net::UPS::Package object. Consider the following example, which rates a single package:
+On success, return value of C<rate()> is an instance of L<Net::UPS::Rate|Net::UPS::Rate> class. If you passed more than one package, it returns a list of Net::UPS::Rate instances, one for each package. The order of the rates returned correspond to the order of the packages. If you prefer to loose track of the order of packages, you can alternatively consult L<rated_package|Net::UPS::Rate/rated_package> accessor method to get to the instance of rated Net::UPS::Package object. Consider the following example, which rates a single package:
 
     $rate = $ups->rate($zip_from, $zip_to, $package);
     unless ( defined $rate ) {
@@ -123,7 +125,7 @@ More often than not you want to be able to display all the shipping options your
 
 C<< $service->rates() >> returns an arrayref of Net::UPS::Rate instances, for each package. If there's only one package, C<< $service->rates() >> returns an arrayref with a single element.
 
-Do not confuse C<< $rate->total_charges() >> with C<< $service->total_charges() >>. There is a subtle, but very important distinction. C<< $rate->total_charges() >> returns your total cost for shipping a particular package using a particular service. C<< $service->total_charges() >>, on the other hand, returns your total cost for shipping all the packages using a particular service.
+In the previous example do not confuse C<< $rate->total_charges() >> with C<< $service->total_charges() >>. There is a subtle, but very important distinction. C<< $rate->total_charges() >> returns your total cost for shipping a particular package using a particular service. C<< $service->total_charges() >>, on the other hand, returns your total cost for shipping all the packages using a particular service. In the case where you're shipping a single package, your C<< $service->total_charges() >> and C<< $rate->total_charges() >> will be identical.
 
 Alternatively, you can rate a single package directly using Net::UPS::Package:
 

@@ -1,6 +1,6 @@
 package Net::UPS::Package;
 
-# $Id: Package.pm,v 1.5 2005/09/07 00:09:14 sherzodr Exp $
+# $Id: Package.pm,v 1.6 2005/09/11 05:05:25 sherzodr Exp $
 
 =head1 NAME
 
@@ -157,6 +157,27 @@ sub is_oversized {
 sub as_XML {
     my $self = shift;
     return XMLout( $self->as_hash, NoAttr=>1, KeepRoot=>1, SuppressEmpty=>1 )
+}
+
+
+
+
+
+
+sub cache_id {
+    my $self = shift;
+    my $packaging_type =  $self->packaging_type || 'PACKAGE';
+    return $packaging_type . ':' . $self->length . ':' . $self->width .':'. $self->height .
+        ':'. $self->weight;
+}
+
+
+
+
+sub rate {
+    my $self = shift;
+    my $ups = Net::UPS->instance();
+    return $ups->rate( $_[0], $_[1], $self, $_[2]);
 }
 
 
