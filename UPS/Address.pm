@@ -1,34 +1,7 @@
 package Net::UPS::Address;
 
-# $Id: Address.pm,v 1.4 2005/09/11 05:05:25 sherzodr Exp $
+# $Id: Address.pm,v 1.5 2005/11/09 18:23:52 sherzodr Exp $
 
-=head1 NAME
-
-Net::UPS::Address - Class that represents a UPS address
-
-=head1 SYNOPSIS
-
-    use Net::UPS::Address;
-    $address = Net::UPS::Address->new();
-    $address->city("Pittsburgh");
-    $address->state("PA");
-    $address->postal_code("15228");
-    $address->country_code("US");
-    $address->is_residential(1);
-
-=head1 DESCRIPTION
-
-Net::UPS::Address is a class representing a shipping address. Valid address attributes are C<city>, C<state>, C<postal_code>, C<country_code> and C<is_residential>.
-
-If address was run through Address Validation Service, additional attribute C<quality> will be set to a floating point number between 0 and 1, inclusively, that represent the quality of match.
-
-=head1 METHODS
-
-In addition to accessor methods documented above, following convenience methods are provided.
-
-=over 4
-
-=cut
 
 use strict;
 use Carp;
@@ -45,19 +18,7 @@ struct(
 );
 
 
-=item is_match()
 
-=item is_very_close_match()
-
-=item is_close_match()
-
-=item is_possible_match()
-
-=item is_poor_match()
-
-When address is returned from Address Validation Service, above attributes can be consulted to find out the quality of the match. I<tolerance> threshold for the above attributes are I<0>, I<0.5>, I<0.10>, I<0.30> and I<1.0> respectively.
-
-=cut
 
 *is_exact_match = \&is_match;
 sub is_match {
@@ -91,8 +52,6 @@ sub is_poor_match {
     return ($self->quality <= 0.69);
 }
 
-
-
 sub as_hash {
     my $self = shift;
     unless ( defined $self->postal_code ) {
@@ -125,10 +84,21 @@ sub as_XML {
 
 
 
-#
-# used as a cache key
-#
 sub cache_id { return $_[0]->postal_code }
+
+
+
+
+
+sub validate {
+    my $self = shift;
+    my $args = shift || {};
+
+    require Net::UPS;
+    my $ups = Net::UPS->instance();
+    return $ups->validate_address($self, $args);
+}
+
 
 
 
@@ -137,6 +107,50 @@ sub cache_id { return $_[0]->postal_code }
 1;
 
 __END__;
+
+=head1 NAME
+
+Net::UPS::Address - Shipping address class
+
+=head1 SYNOPSIS
+
+    use Net::UPS::Address;
+    $address = Net::UPS::Address->new();
+    $address->city("Pittsburgh");
+    $address->state("PA");
+    $address->postal_code("15228");
+    $address->country_code("US");
+    $address->is_residential(1);
+
+=head1 DESCRIPTION
+
+Net::UPS::Address is a class representing a shipping address. Valid address attributes are C<city>, C<state>, C<postal_code>, C<country_code> and C<is_residential>.
+
+If address was run through Address Validation Service, additional attribute C<quality> will be set to a floating point number between 0 and 1, inclusively, that represent the quality of match.
+
+=head1 METHODS
+
+In addition to accessor methods documented above, following convenience methods are provided.
+
+=over 4
+
+=item is_match()
+
+=item is_very_close_match()
+
+=item is_close_match()
+
+=item is_possible_match()
+
+=item is_poor_match()
+
+When address is returned from Address Validation Service, above attributes can be consulted to find out the quality of the match. I<tolerance> threshold for the above attributes are I<0>, I<0.5>, I<0.10>, I<0.30> and I<1.0> respectively.
+
+=item validate()
+
+=item validate(\%args)
+
+Validates the address by submitting itself to US Address Validation service. For this method to work Net::UPS singleton needs to be created first.
 
 =back
 

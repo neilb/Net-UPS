@@ -1,35 +1,7 @@
 package Net::UPS;
 
-# $Id: UPS.pm,v 1.7 2005/09/11 05:05:25 sherzodr Exp $
+# $Id: UPS.pm,v 1.12 2005/11/11 00:06:14 sherzodr Exp $
 
-=head1 NAME
-
-Net::UPS - Implementation of UPS Online Tools API in Perl
-
-=head1 SYNOPSIS
-
-    use Net::UPS;
-    $ups = Net::UPS->new($userid, $password, $accesskey);
-    $rate = $ups->rate($from_zip, $to_zip, $package);
-    printf("Shipping this package $from_zip => $to_zip will cost you \$.2f\n", $rate->total_charges);
-
-=head1 WARNING
-
-Although functional, this is an alpha software. Net::UPS is still under testing stage, and interface can change in the future without any notice. Until this warning sign is removed and Net::UPS version becomes at least 1.0, you are discouraged from using this software in production environment, or do not expect backward-compatible upgrades!
-
-=head1 DESCRIPTION
-
-Net::UPS implements UPS' Online Tools API in Perl. In a nutshell, Net::UPS knows how to retrieve rates and service information for shipping packages using UPS, as well as for validating U.S. addresses.
-
-This manual is optimized to be used as a quick reference. If you're knew to Net::UPS, and this manual doesn't seem to help, you're encouraged to read L<Net::UPS::Tutorial|Net::UPS::Tutorial> first.
-
-=head1 METHODS
-
-Following are the list and description of methods available through Net::UPS. Provided examples may also use other Net::UPS::* libraries and their methods. For the details of those please read their respective manuals. (See L<SEE ALSO|/"SEE ALSO">)
-
-=over 4
-
-=cut
 
 use strict;
 use Carp ('croak');
@@ -41,8 +13,9 @@ use Net::UPS::Service;
 use Net::UPS::Address;
 use Net::UPS::Package;
 
+
 @Net::UPS::ISA          = ( "Net::UPS::ErrorHandler" );
-$Net::UPS::VERSION      = '0.02';
+$Net::UPS::VERSION      = '0.03';
 $Net::UPS::LIVE         = 0;
 
 sub RATE_TEST_PROXY () { 'https://wwwcie.ups.com/ups.app/xml/Rate'  }
@@ -84,24 +57,6 @@ sub import {
     $Net::UPS::LIVE = $args->{live} || 0;
 }
 
-=item live ($bool)
-
-By default, all the API calls in Net::UPS are directed to UPS.com's test servers. This is necessary in testing your integration interface, and not to exhaust UPS.com live servers.
-
-Once you want to go live, L<live()|/"live"> class method needs to be called with a true argument to indicate you want to switch to the UPS.com's live interface. It is recommended that you call live() before creating a Net::UPS instance by calling L<new()|/"new">, like so:
-
-    use Net::UPS;
-    Net::UPS->live(1);
-    $ups = Net::UPS->new($userid, $password, $accesskey);
-
-As an alternative, Net::UPS also supports compile-time switch 'live':
-
-    use Net::UPS (live=>1);
-    $ups = Net::UPS->new($userid, $password, $accesskey);
-
-Note: There seems to be no restrictions between Test servers of UPS.com. So you're encouraged to switch to live mode at the very latest, when the application is about to interact with customers, and not while testing/debugging of the interface by developers.
-
-=cut
 
 sub live {
     my $class = shift;
@@ -112,57 +67,27 @@ sub live {
 }
 
 
-=item new ($userid, $password, $accesskey)
-
-=item new ($userid, $password, $accesskey, \%args)
-
-Constructor method. Builds and returns Net::UPS instance. If an instance exists, C<new()> returns that instance.
-
-C<$userid> and C<$password> are your login information to your UPS.com profile. C<$accesskey> is something you have to request from UPS.com to be able to use UPS Online Tools API.
-
-C<\%args>, if present, are the global arguments you can pass to customize Net::UPS instance, and further calls to UPS.com. Available arguments are as follows
-
-=over 4
-
-=item pickup_type
-
-Type of pickup to be assumed by subsequent L<rate()|/"rate"> and L<shop_for_rates()|/"shop_for_rates"> calls. See L<PICKUP TYPES|PICKUP_TYPES> for the list of available pickup types.
-
-=item ups_account_number
-
-If you have a UPS account number, place it here.
-
-=item customer_classification
-
-Your Customer Classification. For details refer to UPS Online Tools API manual. In general, you'll get the lowest quote if your I<pickup_type> is I<DAILY> and your I<customer_classification> is I<WHOLESALE>. See L<CUSTOMER CLASSIFICATION|/"CUSTOMER CLASSIFICATION">
-
-=item cache_life
-
-Enables caching, as well as defines the life of cache in minutes.
-
-=item cache_root
-
-File-system location of a cache data. Return value of L<tmpdir()|File::Spec/tempdir> is used as default location.
-
-=back
-
-=cut
 
 my $ups = undef;
 sub new {
     my $class = shift;
     croak "new(): usage error" if ref($class);
 
-    if ( (@_ < 3) || (@_ > 4) ) {
+    unless ( (@_ >= 1) || (@_ <= 4) ) {
         croak "new(): invalid number of arguments";
     }
     $ups = bless({
-        __userid      => $_[0],
-        __password    => $_[1],
-        __access_key  => $_[2],
+        __userid      => $_[0] || undef,
+        __password    => $_[1] || undef,
+        __access_key  => $_[2] || undef,
         __args        => $_[3] || {},
         __last_service=> undef
     }, $class);
+
+    if ( @_ < 3 ) {
+        $ups->_read_args_from_file(@_) or return undef;
+    }
+
     unless ( $ups->userid && $ups->password && $ups->access_key ) {
         croak "new(): usage error. Required arguments missing";
     }
@@ -186,11 +111,7 @@ sub new {
 }
 
 
-=item instance ()
 
-Returns an instance of Net::UPS object. Should be called after an instance is created previously by calling C<new()>. C<instance()> croaks if there is no object instance.
-
-=cut
 
 
 sub instance {
@@ -198,32 +119,56 @@ sub instance {
     croak "instance(): no object instance found";
 }
 
-sub init    {}
-sub rate_proxy   { $Net::UPS::LIVE ? RATE_LIVE_PROXY : RATE_TEST_PROXY }
-sub av_proxy     { $Net::UPS::LIVE ? AV_LIVE_PROXY   : AV_TEST_PROXY   }
 
 
-=item userid ()
 
-=item password ()
+sub _read_args_from_file {
+    my $self = shift;
+    my ($path, $args) = @_;
+    $args ||= {};
 
-=item access_key ()
+    unless ( defined $path ) {
+        croak "_read_args_from_file(): required arguments are missing";
+    }
 
-Return UserID, Password and AccessKey values respectively
+    require IO::File;
+    my $fh = IO::File->new($path, '<') or return $self->set_error("couldn't open $path: $!");
+    my %config = ();
+    while (local $_ = $fh->getline) {
+        next if /^\s*\#/;
+        next if /^\n/;
+        next unless /^UPS/;
+        chomp();
+        my ($key, $value) = m/^\s*UPS(\w+)\s+(\S+)$/;
+        $config{ $key } = $value;
+    }
+    unless ( $config{UserID} && $config{Password} && $config{AccessKey} ) {
+        return $self->set_error( "_read_args_from_file(): required arguments are missing" );
+    }
+    $self->{__userid}       = $config{UserID};
+    $self->{__password}     = $config{Password};
+    $self->{__access_key}   = $config{AccessKey};
 
-=cut
 
-sub userid  { return $_[0]->{__userid} }
-sub password{ return $_[0]->{__password} }
-sub access_key { return $_[0]->{__access_key} }
+    $self->{__args}->{customer_classification} = $args->{customer_classification} || $config{CustomerClassification};
+    $self->{__args}->{ups_account_number}      = $args->{ups_account_number}      || $config{AccountNumber};
+    $self->cache_life( $args->{cache_life} || $config{CacheLife} );
+    $self->cache_root( $args->{cache_root} || $config{CacheRoot} );
 
-#=item dump ()
-#
-#For debugging only. Dumps internal object data structure using Data::Dumper.
-#
-#=cut
+    return $self;
+}
 
-sub dump    { return Dumper($_[0])  }
+sub init        {                                                       }
+sub rate_proxy  { $Net::UPS::LIVE ? RATE_LIVE_PROXY : RATE_TEST_PROXY   }
+sub av_proxy    { $Net::UPS::LIVE ? AV_LIVE_PROXY   : AV_TEST_PROXY     }
+sub cache_life  { return $_[0]->{__args}->{cache_life} = $_[1]          }
+sub cache_root  { return $_[0]->{__args}->{cache_root} = $_[1]          }
+sub userid      { return $_[0]->{__userid}                              }
+sub password    { return $_[0]->{__password}                            }
+sub access_key  { return $_[0]->{__access_key}                          }
+sub account_number{return $_[0]->{__args}->{ups_account_number}         }
+sub customer_classification { return $_[0]->{__args}->{customer_classification} }
+sub dump        { return Dumper($_[0])                                  }
 
 sub access_as_xml {
     my $self = shift;
@@ -242,35 +187,6 @@ sub transaction_reference {
         XpciVersion     => '1.0001'
     };
 }
-
-=item rate ($from, $to, $package)
-
-=item rate ($from, $to, \@packages)
-
-=item rate ($from, $to, \@packages, \%args
-
-Returns one Net::UPS::Rate instance for every package requested. If there is only one package, returns a single reference to Net::UPS::Rate. If there are more then one packages passed, returns an arrayref of Net::UPS::Rate objects.
-
-C<$from> and C<$to> can be either plain postal (zip) codes, or instances of Net::UPS::Address. In latter case, the only value required is C<postal_code()>.
-
-C<$package> should be of Net::UPS::Package type and C<@packages> should be an array of Net::UPS::Package objects.
-
-    $rate = $ups->rate(15146, 15241, $package);
-    printf("Your cost is \$.2f\n", $rate->total_charges);
-
-See L<Net::UPS::Package|Net::UPS::Package> for examples of building a package. See L<Net::UPS::Rate|Net::UPS::Rate> for examples of using C<$rate>.
-
-C<\%args>, if present, can be used to customize C<rate()>ing process. Available arguments are:
-
-=over 4
-
-=item service
-
-Specifies what kind of service to rate the package against. Default is I<GROUND>, which rates the package for I<UPS Ground>. See L<SERVICE TYPES|/"SERVICE TYPES"> for a list of available UPS services to choose from.
-
-=back
-
-=cut
 
 sub rate {
     my $self = shift;
@@ -299,63 +215,6 @@ sub rate {
 }
 
 
-=item shop_for_rates ($from, $to, $package)
-
-=item shop_for_rates ($from, $to, \@packages)
-
-=item shop_for_rates ($from, $to, \@packages, \%args)
-
-The same as L<rate()|/"rate">, except on success, returns a reference to a list of available services. Each service is represented as an instance of L<Net::UPS::Service|Net::UPS::Service> class. Output is sorted by L<total_charges()|Net::UPS::Service/"total_charges"> in ascending order. Example:
-
-    $services = $ups->shop_for_rates(15228, 15241, $package);
-    while (my $service = shift @$services ) {
-        printf("%-22s => \$.2f", $service->label, $service->total_charges);
-        if ( my $days = $service->guaranteed_days ) {
-            printf("(delivers in %d day%s)\n", $days, ($days > 1) ? "s" : "");
-        } else {
-            print "\n";
-        }
-    }
-
-Above example returns all the service types available for shipping C<$package> from 15228 to 15241. Output may be similar to this:
-
-    GROUND                 => $5.20
-    3_DAY_SELECT           => $6.35  (delivers in 3 days)
-    2ND_DAY_AIR            => $9.09  (delivers in 2 days)
-    2ND_DAY_AIR_AM         => $9.96  (delivers in 2 days)
-    NEXT_DAY_AIR_SAVER     => $15.33 (delivers in 1 day)
-    NEXT_DAY_AIR           => $17.79 (delivers in 1 day)
-    NEXT_DAY_AIR_EARLY_AM  => $49.00 (delivers in 1 day)
-
-The above example won't change even if you passed multiple packages to be rated. Individual package rates can be accessed through L<rates()|Net::UPS::Service/"rates"> method of L<Net::UPS::Service|Net::UPS::Service>.
-
-C<\%args>, if present, can be used to customize the rating process and/or the return value. Currently supported arguments are:
-
-=over 4
-
-=item limit_to
-
-Tells Net::UPS which service types the result should be limited to. I<limit_to> should always refer to an array of services. For example:
-
-    $services = $ups->shop_for_rates($from, $to, $package, {
-                            limit_to=>['GROUND', '2ND_DAY_AIR', 'NEXT_DAY_AIR']
-    });
-
-This example returns rates for the selected service types only. All other service types will be ignored. Note, that it doesnt' guarantee all the requested service types will be available in the return value of C<shop_for_rates()>. It only returns the services (from the list provided) that are available between the two addresses for the given package(s).
-
-=item exclude
-
-The list provided in I<exclude> will be excluded from the list of available services. For example, assume you don't want rates for 'NEXT_DAY_AIR_SAVER', '2ND_DAY_AIR_AM' and 'NEXT_DAY_AIR_EARLY_AM' returned:
-
-    $service = $ups->from_for_rates($from, $to, $package, {
-                    exclude => ['NEXT_DAY_AIR_SAVER', '2ND_DAY_AIR_AM', 'NEXT_DAY_AIR_EARLY_AM']});
-
-Note that excluding services may even generate an empty service list, because for some location excluded services might be the only services available. You better contact your UPS representative for consultation. As of this writing I haven't done that yet.
-
-=back
-
-=cut
-
 sub shop_for_rates {
     my $self = shift;
     my ($from, $to, $packages, $args) = @_;
@@ -379,12 +238,6 @@ sub shop_for_rates {
 }
 
 
-
-#
-#=item request_rate ($from, $to, \@packages, \%args)
-#
-#
-#=cut
 
 sub request_rate {
     my $self = shift;
@@ -416,9 +269,6 @@ sub request_rate {
     my $cache_key = undef;
     my $cache     = undef;
     if ( defined($cache = $self->{__cache}) ) {
-#        local ($args->{limit_to}, $args->{exclude});
-#        delete $args->{limit_to};
-#        delete $args->{exclude};
         $cache_key = $self->generate_cache_key($from, $to, $packages, $args);
         if ( my $services = $cache->thaw($cache_key) ) {
             return $services;
@@ -509,22 +359,12 @@ sub request_rate {
 }
 
 
-=item service ()
 
-Returns the last service used by the most recent call to C<rate()>.
-
-=cut
 
 sub service {
     return $_[0]->{__last_service};
 }
 
-
-#=item post ($xml_content)
-#
-#Posts XML data to UPS.com's Online Tools  Server, and returns the content returned.
-#
-#=cut
 
 sub post {
     my $self = shift;
@@ -545,47 +385,7 @@ sub post {
 }
 
 
-=item validate_address ($address)
 
-=item validate_address ($address, \%args)
-
-Validates a given address against UPS' U.S. Address Validation service. C<$address> can be one of the following:
-
-=over 4
-
-=item *
-
-US Zip Code
-
-=item *
-
-Hash Reference - keys of the hash should correspond to attributes of Net::UPS::Address
-
-=item *
-
-Net::UPS::Address class instance
-
-=back
-
-C<%args>, if present, contains arguments that effect validation results. As of this release the only supported argument is I<tolerance>, which defines threshold for address matches. I<threshold> is a floating point number between 0 and 1, inclusively. The higher the tolerance threshold, the more loose the address match is, thus more address suggestions are returned. Default I<tolerance> value is 0.05, which only returns very close matches.
-
-    my $addresses = $ups->validate_address($address);
-    unless ( defined $addresses ) {
-        die $ups->errstr;
-    }
-    unless ( @$addresses ) {
-        die "Address is not correct, nor are there any suggestions\n";
-    }
-    if ( $addresses->[0]->is_match ) {
-        print "Address Matches Exactly!\n";
-    } else {
-        print "Your address didn't match exactly. Following are some valid suggestions\n";
-        for (@$addresses ) {
-            printf("%s, %s %s\n", $_->city, $_->state, $_->postal_code);
-        }
-    }
-
-=cut
 
 sub validate_address {
     my $self    = shift;
@@ -642,7 +442,8 @@ sub validate_address {
                 quality         => $ref->{Quality},
                 postal_code     => $ref->{PostalCodeLowEnd},
                 city            => $ref->{Address}->{City},
-                state           => $ref->{Address}->{StateProvinceCode}
+                state           => $ref->{Address}->{StateProvinceCode},
+                country_code    => "US"
             );
             push @addresses, $address;
             $ref->{PostalCodeLowEnd}++;
@@ -650,12 +451,6 @@ sub validate_address {
     }
     return \@addresses;
 }
-
-#=item generate_cache_key ($from, $to, $packages, $args)
-#
-#Generates and returns a unique string to identify the current request. This string is used for caching (remembering) the response of Net::UPS. Both ZIP codes, all the packages, as well as list of arguments are concatenated together to form a string identifying the request. Arguments are first sorted alphabetically before being concatinated.
-#
-#=cut
 
 sub generate_cache_key {
     my $self = shift;
@@ -684,6 +479,216 @@ sub generate_cache_key {
 1;
 __END__
 
+=head1 NAME
+
+Net::UPS - Implementation of UPS Online Tools API in Perl
+
+=head1 SYNOPSIS
+
+    use Net::UPS;
+    $ups = Net::UPS->new($userid, $password, $accesskey);
+    $rate = $ups->rate($from_zip, $to_zip, $package);
+    printf("Shipping this package $from_zip => $to_zip will cost you \$.2f\n", $rate->total_charges);
+
+=head1 DESCRIPTION
+
+Net::UPS implements UPS' Online Tools API in Perl. In a nutshell, Net::UPS knows how to retrieve rates and service information for shipping packages using UPS, as well as for validating U.S. addresses.
+
+This manual is optimized to be used as a quick reference. If you're knew to Net::UPS, and this manual doesn't seem to help, you're encouraged to read L<Net::UPS::Tutorial|Net::UPS::Tutorial> first.
+
+=head1 METHODS
+
+Following are the list and description of methods available through Net::UPS. Provided examples may also use other Net::UPS::* libraries and their methods. For the details of those please read their respective manuals. (See L<SEE ALSO|/"SEE ALSO">)
+
+=over 4
+
+=item live ($bool)
+
+By default, all the API calls in Net::UPS are directed to UPS.com's test servers. This is necessary in testing your integration interface, and not to exhaust UPS.com live servers.
+
+Once you want to go live, L<live()|/"live"> class method needs to be called with a true argument to indicate you want to switch to the UPS.com's live interface. It is recommended that you call live() before creating a Net::UPS instance by calling L<new()|/"new">, like so:
+
+    use Net::UPS;
+    Net::UPS->live(1);
+    $ups = Net::UPS->new($userid, $password, $accesskey);
+
+=item new($userid, $password, $accesskey)
+
+=item new($userid, $password, $accesskey, \%args)
+
+=item new($config_file)
+
+=item new($config_file, \%args)
+
+Constructor method. Builds and returns Net::UPS instance. If an instance exists, C<new()> returns that instance.
+
+C<$userid> and C<$password> are your login information to your UPS.com profile. C<$accesskey> is something you have to request from UPS.com to be able to use UPS Online Tools API.
+
+C<\%args>, if present, are the global arguments you can pass to customize Net::UPS instance, and further calls to UPS.com. Available arguments are as follows:
+
+=over 4
+
+=item pickup_type
+
+Type of pickup to be assumed by subsequent L<rate()|/"rate"> and L<shop_for_rates()|/"shop_for_rates"> calls. See L<PICKUP TYPES|PICKUP_TYPES> for the list of available pickup types.
+
+=item ups_account_number
+
+If you have a UPS account number, place it here.
+
+=item customer_classification
+
+Your Customer Classification. For details refer to UPS Online Tools API manual. In general, you'll get the lowest quote if your I<pickup_type> is I<DAILY> and your I<customer_classification> is I<WHOLESALE>. See L<CUSTOMER CLASSIFICATION|/"CUSTOMER CLASSIFICATION">
+
+=item cache_life
+
+Enables caching, as well as defines the life of cache in minutes.
+
+=item cache_root
+
+File-system location of a cache data. Return value of L<tmpdir()|File::Spec/tempdir> is used as default location.
+
+=back
+
+All the C<%args> can also be defined in the F<$config_file>. C<%args> can be used to overwrite the default arguments. See L<CONFIGURATION FILE|/"CONFIGURATION FILE">
+
+=item instance ()
+
+Returns an instance of Net::UPS object. Should be called after an instance is created previously by calling C<new()>. C<instance()> croaks if there is no object instance.
+
+=item userid ()
+
+=item password ()
+
+=item access_key ()
+
+Return UserID, Password and AccessKey values respectively
+
+=item rate ($from, $to, $package)
+
+=item rate ($from, $to, \@packages)
+
+=item rate ($from, $to, \@packages, \%args)
+
+Returns one Net::UPS::Rate instance for every package requested. If there is only one package, returns a single reference to Net::UPS::Rate. If there are more then one packages passed, returns an arrayref of Net::UPS::Rate objects.
+
+C<$from> and C<$to> can be either plain postal (zip) codes, or instances of Net::UPS::Address. In latter case, the only value required is C<postal_code()>.
+
+C<$package> should be of Net::UPS::Package type and C<@packages> should be an array of Net::UPS::Package objects.
+
+    $rate = $ups->rate(15146, 15241, $package);
+    printf("Your cost is \$.2f\n", $rate->total_charges);
+
+See L<Net::UPS::Package|Net::UPS::Package> for examples of building a package. See L<Net::UPS::Rate|Net::UPS::Rate> for examples of using C<$rate>.
+
+C<\%args>, if present, can be used to customize C<rate()>ing process. Available arguments are:
+
+=over 4
+
+=item service
+
+Specifies what kind of service to rate the package against. Default is I<GROUND>, which rates the package for I<UPS Ground>. See L<SERVICE TYPES|/"SERVICE TYPES"> for a list of available UPS services to choose from.
+
+=back
+
+=item shop_for_rates ($from, $to, $package)
+
+=item shop_for_rates ($from, $to, \@packages)
+
+=item shop_for_rates ($from, $to, \@packages, \%args)
+
+The same as L<rate()|/"rate">, except on success, returns a reference to a list of available services. Each service is represented as an instance of L<Net::UPS::Service|Net::UPS::Service> class. Output is sorted by L<total_charges()|Net::UPS::Service/"total_charges"> in ascending order. Example:
+
+    $services = $ups->shop_for_rates(15228, 15241, $package);
+    while (my $service = shift @$services ) {
+        printf("%-22s => \$.2f", $service->label, $service->total_charges);
+        if ( my $days = $service->guaranteed_days ) {
+            printf("(delivers in %d day%s)\n", $days, ($days > 1) ? "s" : "");
+        } else {
+            print "\n";
+        }
+    }
+
+Above example returns all the service types available for shipping C<$package> from 15228 to 15241. Output may be similar to this:
+
+    GROUND                 => $5.20
+    3_DAY_SELECT           => $6.35  (delivers in 3 days)
+    2ND_DAY_AIR            => $9.09  (delivers in 2 days)
+    2ND_DAY_AIR_AM         => $9.96  (delivers in 2 days)
+    NEXT_DAY_AIR_SAVER     => $15.33 (delivers in 1 day)
+    NEXT_DAY_AIR           => $17.79 (delivers in 1 day)
+    NEXT_DAY_AIR_EARLY_AM  => $49.00 (delivers in 1 day)
+
+The above example won't change even if you passed multiple packages to be rated. Individual package rates can be accessed through L<rates()|Net::UPS::Service/"rates"> method of L<Net::UPS::Service|Net::UPS::Service>.
+
+C<\%args>, if present, can be used to customize the rating process and/or the return value. Currently supported arguments are:
+
+=over 4
+
+=item limit_to
+
+Tells Net::UPS which service types the result should be limited to. I<limit_to> should always refer to an array of services. For example:
+
+    $services = $ups->shop_for_rates($from, $to, $package, {
+                            limit_to=>['GROUND', '2ND_DAY_AIR', 'NEXT_DAY_AIR']
+    });
+
+This example returns rates for the selected service types only. All other service types will be ignored. Note, that it doesnt' guarantee all the requested service types will be available in the return value of C<shop_for_rates()>. It only returns the services (from the list provided) that are available between the two addresses for the given package(s).
+
+=item exclude
+
+The list provided in I<exclude> will be excluded from the list of available services. For example, assume you don't want rates for 'NEXT_DAY_AIR_SAVER', '2ND_DAY_AIR_AM' and 'NEXT_DAY_AIR_EARLY_AM' returned:
+
+    $service = $ups->from_for_rates($from, $to, $package, {
+                    exclude => ['NEXT_DAY_AIR_SAVER', '2ND_DAY_AIR_AM', 'NEXT_DAY_AIR_EARLY_AM']});
+
+Note that excluding services may even generate an empty service list, because for some location excluded services might be the only services available. You better contact your UPS representative for consultation. As of this writing I haven't done that yet.
+
+=back
+
+=item service ()
+
+Returns the last service used by the most recent call to C<rate()>.
+
+=item validate_address ($address)
+
+=item validate_address ($address, \%args)
+
+Validates a given address against UPS' U.S. Address Validation service. C<$address> can be one of the following:
+
+=over 4
+
+=item *
+
+US Zip Code
+
+=item *
+
+Hash Reference - keys of the hash should correspond to attributes of Net::UPS::Address
+
+=item *
+
+Net::UPS::Address class instance
+
+=back
+
+C<%args>, if present, contains arguments that effect validation results. As of this release the only supported argument is I<tolerance>, which defines threshold for address matches. I<threshold> is a floating point number between 0 and 1, inclusively. The higher the tolerance threshold, the more loose the address match is, thus more address suggestions are returned. Default I<tolerance> value is 0.05, which only returns very close matches.
+
+    my $addresses = $ups->validate_address($address);
+    unless ( defined $addresses ) {
+        die $ups->errstr;
+    }
+    unless ( @$addresses ) {
+        die "Address is not correct, nor are there any suggestions\n";
+    }
+    if ( $addresses->[0]->is_match ) {
+        print "Address Matches Exactly!\n";
+    } else {
+        print "Your address didn't match exactly. Following are some valid suggestions\n";
+        for (@$addresses ) {
+            printf("%s, %s %s\n", $_->city, $_->state, $_->postal_code);
+        }
+    }
 
 =pod
 
@@ -803,5 +808,56 @@ Following are all valid packaging types that can be set through I<packaging_type
     | UPS_25KG_BOX    |     24    |
     | UPS_10KG_BOX    |     25    |
     +-----------------+-----------+
+
+=head2 CONFIGURATION FILE
+
+Net::UPS object can also be instantiated using a configuration file. Example:
+
+    $ups = Net::UPS->new("/home/sherzodr/.upsrc");
+    # or
+    $ups = Net::UPS->new("/home/sherzodr/.upsrc", \%args);
+
+All the directives in the configuration file intended for use by Net::UPS will be prefixed with I<UPS>. All other directives that Net::UPS does not recognize will be conveniently ignored. Configuration file uses the following format:
+
+    DirectiveName  DirectiveValue
+
+Where C<DirectiveName> is one of the keywords documented below.
+
+=head3 SUPPORTED DIRECTIVES
+
+=over 4
+
+=item UPSAccessKey
+
+AccessKey as acquired from UPS.com Online Tools web site. Required.
+
+=item UPSUserID
+
+Online login id for the account. Required.
+
+=item UPSPassword
+
+Online password for the account. Required.
+
+=item UPSCacheLife
+
+To Turn caching on. Value of the directive also defines life-time for the cache.
+
+=item UPSCacheRoot
+
+Place to store cache files in. Setting this directive does not automatically turn caching on. UPSCacheLife needs to be set for this directive to be effective. UPSCacheRoot will defautlt o your system's temporary folder if it's missing.
+
+=item UPSLive
+
+Setting this directive to any true value will make Net::UPS to initiate calls to UPS.com's live servers. Without this directive Net::UPS always operates under test mode.
+
+=item UPSPickupType
+
+=item UPSAccountNumber
+
+=item UPSCustomerClassification
+
+
+=back
 
 =cut

@@ -25,7 +25,7 @@ Net::UPS::Tutorial - Simple class implementing UPSOnlineTools API
     printf("Your total cost for the two: \$.2f\n", $ups->service()->total_charges);
     printf("Here is the breakdown for each package:\n");
     while (my $rate = shift @$rates ) {
-        printf("Package %d => \$.2f\n", $rate->package->id, $rate->total_charges);
+        printf("Package %d => \$.2f\n", $rate->rated_package->id, $rate->total_charges);
     }
     
 =head1 DESCRIPTION
@@ -66,13 +66,22 @@ Above code doesn't try to authenticate the account at this point, thus it never 
 
 To calculate UPS Rates and Services for a single package, using a specific service, you first have to create Net::UPS instance as described above. Then, you have to prepare your packages using Net::UPS::Package. Suppose, we have a print of size 18" by 30". We could package the print in a box of 24 by 34, which will be about 1.5" thick, weighing about a pound:
 
-    $package = Net::UPS::Package->new({length=>34, width=>24, height=>1.5, weight=>1});
+    $package = Net::UPS::Package->new(
+        length  => 34, 
+        width   => 24, 
+        height  => 1.5, 
+        weight  => 1
+    );
 
 By default Net::UPS uses English system of measurement. If you want to use metric units you have to pass the second argument to Net::UPS::Package->new() like so:
 
     $package = Net::UPS::Package->new(
-        {length=>70, width=>50, height=>3, weight=>1}
-        {measurement_system=>'metric'});
+        length              =>  70, 
+        width               => 50, 
+        height              => 3, 
+        weight              => 1,
+        measurement_system  =>'metric'
+    );
 
 Now all the length units are in centimeters, and weight is measured in KG.
 
@@ -80,7 +89,7 @@ You can prepare multiple packages. Just repeat the above procedure for all the p
 
 Before you can submit your package for a rate quote,  you have to prepare two more objects, Shipper's (Your) address, and Recipients's (the customer's) address. That's where Net::UPS::Address comes in.
 
-In calculating shipping cost, the only essential part of the address is the destination and origination zip code (for US). So instead of preparing an address object, you could also pass raw zip code string to C<rate()> method, like so:
+In calculating shipping cost, the only essential part of the address is the destination and origination zip code (for US). So instead of preparing an address object, you could alternatively pass raw zip code string to C<rate()> method, like so:
 
     my $rate = $ups->rate($zip_from, $zip_to, $package);
 
@@ -107,7 +116,7 @@ Following example shows how to rate multiple packages:
         die "Couldn't calculate rates for submitted packages: " . $ups->errstr);
     }
     while ($rate = shift @$rates ) {
-        printf("PKG %d => %.2f\n", $rate->package->id, $rate->total_charges);
+        printf("PKG %d => %.2f\n", $rate->rated_package->id, $rate->total_charges);
     }
 
 

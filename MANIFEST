@@ -1,9 +1,11 @@
 bin/zipcode
 Changes
+INSTALL
 Makefile.PL
 MANIFEST			This list of files
 README
-test.pl
+t/01.t
+t/02address.t
 UPS.pm
 UPS/Address.pm
 UPS/ErrorHandler.pm
