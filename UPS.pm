@@ -15,7 +15,7 @@ use Net::UPS::Package;
 
 
 @Net::UPS::ISA          = ( "Net::UPS::ErrorHandler" );
-$Net::UPS::VERSION      = '0.03';
+$Net::UPS::VERSION      = '0.04';
 $Net::UPS::LIVE         = 0;
 
 sub RATE_TEST_PROXY () { 'https://wwwcie.ups.com/ups.app/xml/Rate'  }
@@ -737,6 +737,10 @@ Following featureds need to be supported by Net::UPS::Service as well as in form
 =head1 AUTHOR
 
 Sherzod B. Ruzmetov E<lt>sherzodr@cpan.orgE<gt>, http://author.handalak.com/
+
+=head2 CREDITS
+
+Thanks to Christian - E<lt>cpan [AT] pickledbrain.comE<gt> for locating and fixing a bug in Net::UPS::Package::is_oversized(). See the source for details.
 
 =head1 COPYRIGHT
 

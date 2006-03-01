@@ -6,7 +6,7 @@ use Net::UPS;
 
 my $upsrc = File::Spec->catfile($ENV{HOME}, ".upsrc");
 my $ups = undef;
-unless (defined($ups = Net::UPS->new("/home/sherzodr/.upsrc")) ) {
+unless (defined($ups = Net::UPS->new($upsrc)) ) {
     plan(skip_all=>Net::UPS->errstr);
     exit(0);
 }

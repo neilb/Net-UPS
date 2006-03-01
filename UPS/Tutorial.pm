@@ -14,20 +14,17 @@ Net::UPS::Tutorial - Simple class implementing UPSOnlineTools API
 =head1 SYNOPSIS
 
     use Net::UPS;
-    $ups = Net::UPS->new($username, $password, $accesskey, \%args);
+    $ups = Net::UPS->new("username", "password", "BADFASR143124ABAS");
 
-    # calculate rate for a single package
-    $rate = $ups->rate(13435, 53322, $package);
+    # prepare package
+    $pkg = Net::UPS::Package->new(length=>24, width=>20, height=>2, weight=>4);
+
+    # calculate rate
+    $rate = $ups->rate(15241, 48823, $pkg);
+
     printf("Total Charges: \$.2f\n", $rate->total_charges);
 
-    # get rates for multiple packages at ones
-    $rates = $ups->rate(14333, 52332, [$package1, $package2]);
-    printf("Your total cost for the two: \$.2f\n", $ups->service()->total_charges);
-    printf("Here is the breakdown for each package:\n");
-    while (my $rate = shift @$rates ) {
-        printf("Package %d => \$.2f\n", $rate->rated_package->id, $rate->total_charges);
-    }
-    
+
 =head1 DESCRIPTION
 
 Net::UPS implements UPS Online Tools API, as documented at http://www.ups.com/content/us/en/bussol/itprof/online_tools.html . Currently implemented APIs are:
@@ -40,11 +37,9 @@ Net::UPS implements UPS Online Tools API, as documented at http://www.ups.com/co
 
 =back
 
-To be able to make use of this library in your e-commerce environment, you first have to register with UPS, request a Developers Key and XML Access Key. Developers Key will grant  you access to online documentation, which you may no longer need, since Net::UPS is packed with all that knowledge. XML Access Key grants you access to UPS.com's resources. Net::UPS requires you obtain XML Access Key to work.
+To add UPS functionality to your e-commerce web site, you first have to register with UPS.com, request a Developers Key and XML Access Key. Developers Key will grant  you access to online documentation, which you may no longer need, since Net::UPS is packed with all that knowledge. XML Access Key grants you access to UPS.com's resources. Net::UPS requires you obtain XML Access Key.
 
 =head1 PROGRAMMING STYLE
-
-This manual is meant to be a step-by-step tutorial on Programming with Net::UPS, and might not cover all the methods supported by the library. For a reference of methods consider L<Net::UPS|Net::UPS>.
 
 =head2 OVERVIEW
 
@@ -54,11 +49,11 @@ In true e-commerce environment, you usually use more than one of these APIs at t
 
 For that purpose, we designed Net::UPS to be singleton, and you have to create Net::UPS object at the start of the process. You will not be required to provide your access information any more.
 
-Any classes that require your access information will consult in-memory Net::UPS object to get access to UPS' resources. That's how you create Net::UPS object:
+Any classes that require your access information will consult in-memory Net::UPS object. That's how you create Net::UPS object:
 
     $ups = Net::UPS->new($username, $password, $xml_access_key);
 
-$username and $password are your login information to your UPS profile. $xml_access_key is something you were supposed to get from UPS after receiving your Developer's Key.
+$username and $password are your login information to your UPS.com profile. $xml_access_key is something you were supposed to get from UPS after receiving your Developer's Key.
 
 Above code doesn't try to authenticate the account at this point, thus it never returns an error of any kind. If any of the above information are not correct, you will not find out about it until Net::UPS actually connects to UPS.com.
 
@@ -73,7 +68,7 @@ To calculate UPS Rates and Services for a single package, using a specific servi
         weight  => 1
     );
 
-By default Net::UPS uses English system of measurement. If you want to use metric units you have to pass the second argument to Net::UPS::Package->new() like so:
+By default Net::UPS uses English system of measurement. If you want to use metric units:
 
     $package = Net::UPS::Package->new(
         length              =>  70, 
