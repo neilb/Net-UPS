@@ -1,7 +1,4 @@
 package Net::UPS::ErrorHandler;
-
-# $Id: ErrorHandler.pm,v 1.2 2005/09/06 05:44:43 sherzodr Exp $
-
 use strict;
 use Carp ( 'croak' );
 

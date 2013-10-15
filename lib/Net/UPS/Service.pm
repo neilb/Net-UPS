@@ -1,7 +1,4 @@
 package Net::UPS::Service;
-
-# $Id: Service.pm,v 1.4 2005/11/09 18:23:52 sherzodr Exp $
-
 use strict;
 use Carp ( 'croak' );
 use Class::Struct 0.58;

@@ -1,8 +1,4 @@
 package Net::UPS::Address;
-
-# $Id: Address.pm,v 1.5 2005/11/09 18:23:52 sherzodr Exp $
-
-
 use strict;
 use Carp;
 use XML::Simple;

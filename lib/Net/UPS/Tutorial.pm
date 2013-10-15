@@ -1,8 +1,5 @@
 package Net::UPS::Tutorial;
 
-$Net::UPS::Tutorial::VERSION = '1.00';
-
-
 =pod
 
 # Below is stub documentation for your module. You better edit it!

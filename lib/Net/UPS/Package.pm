@@ -1,7 +1,5 @@
 package Net::UPS::Package;
 
-# $Id: Package.pm,v 1.6 2005/09/11 05:05:25 sherzodr Exp $
-
 =head1 NAME
 
 Net::UPS::Package - Class representing a UPS Package
@@ -32,8 +30,6 @@ use strict;
 use Carp ( 'croak' );
 use XML::Simple;
 use Class::Struct 0.58;
-
-$Net::UPS::Package::VERSION = '0.02';
 
 struct(
     id                  => '$',

@@ -1,8 +1,4 @@
 package Net::UPS;
-
-# $Id: UPS.pm,v 1.12 2005/11/11 00:06:14 sherzodr Exp $
-
-
 use strict;
 use Carp ('croak');
 use XML::Simple;
@@ -15,7 +11,6 @@ use Net::UPS::Package;
 
 
 @Net::UPS::ISA          = ( "Net::UPS::ErrorHandler" );
-$Net::UPS::VERSION      = '0.04';
 $Net::UPS::LIVE         = 0;
 
 sub RATE_TEST_PROXY () { 'https://wwwcie.ups.com/ups.app/xml/Rate'      }

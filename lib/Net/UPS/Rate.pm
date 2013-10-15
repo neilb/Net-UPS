@@ -1,7 +1,4 @@
 package Net::UPS::Rate;
-
-# $Id: Rate.pm,v 1.3 2005/09/07 00:09:14 sherzodr Exp $
-
 use strict;
 use Class::Struct 0.58;
 use Carp ( 'croak');
