@@ -162,7 +162,7 @@ Creates a Net::UPS::Service instance using the service code. Example:
 =item new_from_label($label)
 
 Create Net::UPS::Service instance using the service label. Example:
-    
+
     $service = Net::UPS::Service->new_from_label('2ND_DAY_AIR');
     printf("Service code is: %s\n", $service->code);
 
