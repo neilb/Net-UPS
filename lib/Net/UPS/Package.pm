@@ -90,11 +90,6 @@ sub as_hash {
             PackagingType       => {
                 Code => $self->packaging_type ? sprintf("%02d", $self->_packaging2code($self->packaging_type)) : '02',
             },
-            Dimensions          => {
-                UnitOfMeasurement => {
-                    Code => $length_measure
-                }
-            },
             DimensionalWeight   => {
                 UnitOfMeasurement => {
                     Code => $weight_measure
@@ -107,15 +102,25 @@ sub as_hash {
             }
         }
     );
-    if ( $self->length ) {
-        $data{Package}->{Dimensions}->{Length}= $self->length;
+
+    if ( $self->length || $self->width || $self->height ) {
+        $data{Package}->{Dimensions} = {
+            UnitOfMeasurement => {
+                Code => $length_measure
+            }
+        };
+
+        if ( $self->length ) {
+            $data{Package}->{Dimensions}->{Length}= $self->length;
+        }
+        if ( $self->width ) {
+            $data{Package}->{Dimensions}->{Width} = $self->width;
+        }
+        if ( $self->height ) {
+            $data{Package}->{Dimensions}->{Height} = $self->height;
+        }
     }
-    if ( $self->width ) {
-        $data{Package}->{Dimensions}->{Width} = $self->width;
-    }
-    if ( $self->height ) {
-        $data{Package}->{Dimensions}->{Height} = $self->height;
-    }
+
     if ( $self->weight ) {
         $data{Package}->{PackageWeight}->{Weight} = $self->weight;
     }
