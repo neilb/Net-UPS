@@ -1,5 +1,6 @@
 package Net::UPS;
 use strict;
+use warnings;
 use Carp ('croak');
 use XML::Simple;
 use LWP::UserAgent;

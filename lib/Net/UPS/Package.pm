@@ -1,4 +1,9 @@
 package Net::UPS::Package;
+use strict;
+use warnings;
+use Carp ( 'croak' );
+use XML::Simple;
+use Class::Struct 0.58;
 
 =head1 NAME
 
@@ -25,11 +30,6 @@ In addition to all the aforementioned attributes, following method(s) are suppor
 =over 4
 
 =cut
-
-use strict;
-use Carp ( 'croak' );
-use XML::Simple;
-use Class::Struct 0.58;
 
 struct(
     id                  => '$',

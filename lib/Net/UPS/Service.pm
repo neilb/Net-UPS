@@ -1,5 +1,6 @@
 package Net::UPS::Service;
 use strict;
+use warnings;
 use Carp ( 'croak' );
 use Class::Struct 0.58;
 

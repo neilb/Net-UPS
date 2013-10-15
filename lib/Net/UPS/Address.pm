@@ -1,5 +1,6 @@
 package Net::UPS::Address;
 use strict;
+use warnings;
 use Carp;
 use XML::Simple;
 use Class::Struct 0.58;

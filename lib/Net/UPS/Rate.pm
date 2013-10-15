@@ -1,5 +1,6 @@
 package Net::UPS::Rate;
 use strict;
+use warnings;
 use Class::Struct 0.58;
 use Carp ( 'croak');
 
