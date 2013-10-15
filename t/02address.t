@@ -21,9 +21,9 @@ use_ok("Net::UPS::Address");
 
 
 my $address = Net::UPS::Address->new();
-ok(    $address->can("city") 
-    && $address->can("postal_code") 
-    && $address->can("state") 
+ok(    $address->can("city")
+    && $address->can("postal_code")
+    && $address->can("state")
     && $address->can("country_code")
     && $address->can("is_residential")
     && $address->can("quality")

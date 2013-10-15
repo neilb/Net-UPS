@@ -1,7 +1,10 @@
 package Net::UPS::Tutorial;
-
-$Net::UPS::Tutorial::VERSION = '1.00';
-
+{
+  $Net::UPS::Tutorial::VERSION = '0.05'; # TRIAL
+}
+{
+  $Net::UPS::Tutorial::DIST = 'Net-UPS';
+}
 
 =pod
 
@@ -62,18 +65,18 @@ Above code doesn't try to authenticate the account at this point, thus it never 
 To calculate UPS Rates and Services for a single package, using a specific service, you first have to create Net::UPS instance as described above. Then, you have to prepare your packages using Net::UPS::Package. Suppose, we have a print of size 18" by 30". We could package the print in a box of 24 by 34, which will be about 1.5" thick, weighing about a pound:
 
     $package = Net::UPS::Package->new(
-        length  => 34, 
-        width   => 24, 
-        height  => 1.5, 
+        length  => 34,
+        width   => 24,
+        height  => 1.5,
         weight  => 1
     );
 
 By default Net::UPS uses English system of measurement. If you want to use metric units:
 
     $package = Net::UPS::Package->new(
-        length              =>  70, 
-        width               => 50, 
-        height              => 3, 
+        length              =>  70,
+        width               => 50,
+        height              => 3,
         weight              => 1,
         measurement_system  =>'metric'
     );

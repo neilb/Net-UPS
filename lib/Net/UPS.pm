@@ -1,9 +1,12 @@
 package Net::UPS;
-
-# $Id: UPS.pm,v 1.12 2005/11/11 00:06:14 sherzodr Exp $
-
-
+{
+  $Net::UPS::VERSION = '0.05'; # TRIAL
+}
+{
+  $Net::UPS::DIST = 'Net-UPS';
+}
 use strict;
+use warnings;
 use Carp ('croak');
 use XML::Simple;
 use LWP::UserAgent;
@@ -15,13 +18,12 @@ use Net::UPS::Package;
 
 
 @Net::UPS::ISA          = ( "Net::UPS::ErrorHandler" );
-$Net::UPS::VERSION      = '0.04';
 $Net::UPS::LIVE         = 0;
 
-sub RATE_TEST_PROXY () { 'https://wwwcie.ups.com/ups.app/xml/Rate'  }
-sub RATE_LIVE_PROXY () { 'https://www.ups.com/ups.app/xml/Rate'     }
-sub AV_TEST_PROXY   () { 'https://wwwcie.ups.com/ups.app/xml/AV'    }
-sub AV_LIVE_PROXY   () { 'https://www.ups.com/ups.app/xml/AV'       }
+sub RATE_TEST_PROXY () { 'https://wwwcie.ups.com/ups.app/xml/Rate'      }
+sub RATE_LIVE_PROXY () { 'https://onlinetools.ups.com/ups.app/xml/Rate' }
+sub AV_TEST_PROXY   () { 'https://wwwcie.ups.com/ups.app/xml/AV'        }
+sub AV_LIVE_PROXY   () { 'https://onlinetools.ups.com/ups.app/xml/AV'   }
 
 sub PICKUP_TYPES () {
     return {
@@ -152,6 +154,8 @@ sub _read_args_from_file {
 
     $self->{__args}->{customer_classification} = $args->{customer_classification} || $config{CustomerClassification};
     $self->{__args}->{ups_account_number}      = $args->{ups_account_number}      || $config{AccountNumber};
+    $self->{__args}->{rate_proxy} = $args->{rate_proxy} || $config{RateProxy};
+    $self->{__args}->{av_proxy} = $args->{av_proxy} || $config{AVProxy};
     $self->cache_life( $args->{cache_life} || $config{CacheLife} );
     $self->cache_root( $args->{cache_root} || $config{CacheRoot} );
 
@@ -159,8 +163,8 @@ sub _read_args_from_file {
 }
 
 sub init        {                                                       }
-sub rate_proxy  { $Net::UPS::LIVE ? RATE_LIVE_PROXY : RATE_TEST_PROXY   }
-sub av_proxy    { $Net::UPS::LIVE ? AV_LIVE_PROXY   : AV_TEST_PROXY     }
+sub rate_proxy  { return $_[0]->{__args}->{rate_proxy} || ($Net::UPS::LIVE ? RATE_LIVE_PROXY : RATE_TEST_PROXY) }
+sub av_proxy    { return $_[0]->{__args}->{av_proxy} || ($Net::UPS::LIVE ? AV_LIVE_PROXY   : AV_TEST_PROXY) }
 sub cache_life  { return $_[0]->{__args}->{cache_life} = $_[1]          }
 sub cache_root  { return $_[0]->{__args}->{cache_root} = $_[1]          }
 sub userid      { return $_[0]->{__userid}                              }
@@ -207,6 +211,7 @@ sub rate {
     $args->{service}        ||= "GROUND";
 
     my $services = $self->request_rate($from, $to, $packages, $args);
+    return if !defined $services;
     if ( @$packages == 1 ) {
         return $services->[0]->rates()->[0];
     }
@@ -234,10 +239,19 @@ sub shop_for_rates {
     $args           ||= {};
     $args->{mode}     = "shop";
     $args->{service}||= "GROUND";
-    return [sort{$a->total_charges <=>$b->total_charges} @{$self->request_rate($from, $to, $packages, $args)}];
+
+    # Scoob correction Aug 19th 2006 / cpan@pickledbrain.com
+    # There was a Perl run time error when no rates were found
+    # (empty package list, bad zip code etc...)
+    # request_rate() can now return undef in case of errors.
+    ####
+    my $services_aref = $self->request_rate($from, $to, $packages, $args);
+    if (defined $services_aref) {
+        return [sort {$a->total_charges <=>$b->total_charges} @$services_aref];
+    } else {
+        return undef;  # No services were
+    }
 }
-
-
 
 sub request_rate {
     my $self = shift;
@@ -263,6 +277,10 @@ sub request_rate {
     if ( $args->{exclude} && $args->{limit_to} ) {
         croak "request_rate(): usage error. You cannot use both 'limit_to' and 'exclude' at the same time";
     }
+    unless (scalar(@$packages)) {
+        return $self->set_error( "request_rate() was given an empty list of packages!" );
+    }
+
     for (my $i=0; $i < @$packages; $i++ ) {
         $packages->[$i]->id( $i + 1 );
     }
@@ -303,9 +321,44 @@ sub request_rate {
                                             NoAttr => 1,
                                             KeyAttr => [],
                                             ForceArray => ['RatedPackage', 'RatedShipment']);
+
+    ##############################################################################
+    # Scoob correction Jan 2nd 2007 / cpan AT pickledbrain.com
+    #
+    # Changes to handle latest UPS xml service.  See this document for details:
+    #
+    # This new release of the document:
+    #    "UPS online tools
+    #     Rates and Service Selection - XML Programming Invormation
+    #     version 1.0,  Volume 7, number 1   rev date Dec 17th 2006"
+    #
+    #  Get it at:  http://www.ups.com/onlinetools  (registration required)
+    #
+    #  UPS just introduced two new errors codes (warning level):
+    #    ErrorCode:        110971
+    #    ErrorSeverity:    Warning
+    #    ErrorDescription: 'Your invoice may vary from the displayed reference rates'
+    #            AND
+    #    ErrorCode:        110920
+    #    ErrorSeverity:    Warning
+    #    ErrorDescription: 'Ship To address has been changed from (residential/commercial)
+    #                                    to (commercial/residential)'
+    #
+    #    The original code here did not handle any "warning" level
+    #    (there were no other cases of warning level errors prior to this)
+    #    and simply returned an error w/o the shipping rates.
+    #
+    #    The code change below simply ignore those two warnings as they are
+    #    essentially legal cover-your-ass and not all that useful here.
+    #
+    #####
+    # Ignore "Warning" level error
     if ( my $error  =  $response->{Response}->{Error} ) {
-        return $self->set_error( $error->{ErrorDescription} );
+        unless ($error->{'ErrorSeverity'} eq 'Warning') {
+            return $self->set_error( $error->{ErrorDescription} );
+        }
     }
+
     my @services;
     for (my $i=0; $i < @{$response->{RatedShipment}}; $i++ ) {
         my $ref = $response->{RatedShipment}->[$i] or die;
@@ -392,7 +445,7 @@ sub validate_address {
     my ($address, $args) = @_;
 
     croak "verify_address(): usage error" unless defined($address);
-    
+
     unless ( ref $address ) {
         $address = {postal_code => $address};
     }
@@ -431,7 +484,9 @@ sub validate_address {
                                                 KeepRoot=>0, NoAttr=>1,
                                                 KeyAttr=>[], ForceArray=>["AddressValidationResult"]);
     if ( my $error = $response->{Response}->{Error} ) {
-        return $self->set_error( $error->{ErrorDescription} );
+        unless ($error->{'ErrorSeverity'} eq 'Warning') {
+            return $self->set_error( $error->{ErrorDescription} );
+        }
     }
     my @addresses = ();
     for (my $i=0; $i < @{$response->{AddressValidationResult}}; $i++ ) {
@@ -547,6 +602,16 @@ Enables caching, as well as defines the life of cache in minutes.
 =item cache_root
 
 File-system location of a cache data. Return value of L<tmpdir()|File::Spec/tempdir> is used as default location.
+
+=item av_proxy
+
+The URL to use to access the AV service. If you set this one, the
+L</live> setting will be ignored, and this URL always used.
+
+=item rate_proxy
+
+The URL to use to access the Rate service. If you set this one, the
+L</live> setting will be ignored, and this URL always used.
 
 =back
 
@@ -672,7 +737,7 @@ Net::UPS::Address class instance
 
 =back
 
-C<%args>, if present, contains arguments that effect validation results. As of this release the only supported argument is I<tolerance>, which defines threshold for address matches. I<threshold> is a floating point number between 0 and 1, inclusively. The higher the tolerance threshold, the more loose the address match is, thus more address suggestions are returned. Default I<tolerance> value is 0.05, which only returns very close matches.
+C<%args>, if present, contains arguments that effect validation results. As of this release the only supported argument is I<tolerance>, which defines threshold for address matches. I<tolerance> is a floating point number between 0 and 1, inclusively. The higher the tolerance threshold, the more loose the address match is, thus more address suggestions are returned. Default I<tolerance> value is 0.05, which only returns very close matches.
 
     my $addresses = $ups->validate_address($address);
     unless ( defined $addresses ) {

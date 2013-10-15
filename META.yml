@@ -1,14 +1,34 @@
-# http://module-build.sourceforge.net/META-spec.html
-#XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
-name:         Net-UPS
-version:      0.04
-version_from: UPS.pm
-installdirs:  site
+---
+abstract: 'Implementation of UPS Online Tools API in Perl'
+author:
+  - 'Sherzod B. Ruzmetov <sherzodr@cpan.org>'
+  - 'Gianni Ceccarelli <gianni.ceccarelli@net-a-porter.com>'
+build_requires:
+  Test::Deep: 0
+  Test::Exception: 0
+  Test::More: 0
+  diagnostics: 0
+configure_requires:
+  ExtUtils::MakeMaker: 6.30
+dynamic_config: 0
+generated_by: 'Dist::Zilla version 4.300039, CPAN::Meta::Converter version 2.132140'
+license: perl
+meta-spec:
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: 1.4
+name: Net-UPS
+no_index:
+  directory:
+    - t/lib
 requires:
-    Class::Struct:                 0.58
-    Crypt::SSLeay:                 
-    LWP::UserAgent:                
-    XML::Simple:                   
-
-distribution_type: module
-generated_by: ExtUtils::MakeMaker version 6.30
+  Carp: 0
+  Class::Struct: 0.58
+  File::Spec: 0
+  IO::File: 0
+  LWP::UserAgent: 0
+  XML::Simple: 0
+  strict: 0
+  warnings: 0
+resources:
+  repository: git://github.com/NET-A-PORTER/Net-UPS.git
+version: 0.05

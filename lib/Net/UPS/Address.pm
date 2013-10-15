@@ -1,12 +1,15 @@
 package Net::UPS::Address;
-
-# $Id: Address.pm,v 1.5 2005/11/09 18:23:52 sherzodr Exp $
-
-
+{
+  $Net::UPS::Address::VERSION = '0.05'; # TRIAL
+}
+{
+  $Net::UPS::Address::DIST = 'Net-UPS';
+}
 use strict;
+use warnings;
 use Carp;
 use XML::Simple;
-use Class::Struct;
+use Class::Struct 0.58;
 
 struct(
     quality             => '$',

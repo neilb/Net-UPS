@@ -1,8 +1,12 @@
 package Net::UPS::ErrorHandler;
-
-# $Id: ErrorHandler.pm,v 1.2 2005/09/06 05:44:43 sherzodr Exp $
-
+{
+  $Net::UPS::ErrorHandler::VERSION = '0.05'; # TRIAL
+}
+{
+  $Net::UPS::ErrorHandler::DIST = 'Net-UPS';
+}
 use strict;
+use warnings;
 use Carp ( 'croak' );
 
 

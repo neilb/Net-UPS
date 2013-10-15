@@ -1,16 +1,23 @@
-bin/zipcode
 Changes
 INSTALL
+MANIFEST
+META.json
+META.yml
 Makefile.PL
-MANIFEST			This list of files
 README
+bin/zipcode
+dist.ini
+lib/Net/UPS.pm
+lib/Net/UPS/Address.pm
+lib/Net/UPS/ErrorHandler.pm
+lib/Net/UPS/Package.pm
+lib/Net/UPS/Rate.pm
+lib/Net/UPS/Service.pm
+lib/Net/UPS/Tutorial.pm
 t/01.t
 t/02address.t
-UPS.pm
-UPS/Address.pm
-UPS/ErrorHandler.pm
-UPS/Package.pm
-UPS/Rate.pm
-UPS/Service.pm
-UPS/Tutorial.pm
-META.yml                                 Module meta-data (added by MakeMaker)
+t/custom-url.t
+t/missing-sizes.t
+t/oversized.t
+t/release-no-tabs.t
+t/release-pod-syntax.t
