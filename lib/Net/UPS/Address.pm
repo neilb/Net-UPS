@@ -6,7 +6,7 @@ package Net::UPS::Address;
 use strict;
 use Carp;
 use XML::Simple;
-use Class::Struct;
+use Class::Struct 0.58;
 
 struct(
     quality             => '$',

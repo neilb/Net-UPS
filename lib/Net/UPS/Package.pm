@@ -31,7 +31,7 @@ In addition to all the aforementioned attributes, following method(s) are suppor
 use strict;
 use Carp ( 'croak' );
 use XML::Simple;
-use Class::Struct;
+use Class::Struct 0.58;
 
 $Net::UPS::Package::VERSION = '0.02';
 

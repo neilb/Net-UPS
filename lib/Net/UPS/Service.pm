@@ -4,7 +4,7 @@ package Net::UPS::Service;
 
 use strict;
 use Carp ( 'croak' );
-use Class::Struct;
+use Class::Struct 0.58;
 
 struct(
     code            => '$',
