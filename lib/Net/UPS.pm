@@ -209,6 +209,7 @@ sub rate {
     $args->{service}        ||= "GROUND";
 
     my $services = $self->request_rate($from, $to, $packages, $args);
+    return if !defined $services;
     if ( @$packages == 1 ) {
         return $services->[0]->rates()->[0];
     }
@@ -236,10 +237,19 @@ sub shop_for_rates {
     $args           ||= {};
     $args->{mode}     = "shop";
     $args->{service}||= "GROUND";
-    return [sort{$a->total_charges <=>$b->total_charges} @{$self->request_rate($from, $to, $packages, $args)}];
+
+    # Scoob correction Aug 19th 2006 / cpan@pickledbrain.com
+    # There was a Perl run time error when no rates were found
+    # (empty package list, bad zip code etc...)
+    # request_rate() can now return undef in case of errors.
+    ####
+    my $services_aref = $self->request_rate($from, $to, $packages, $args);
+    if (defined $services_aref) {
+        return [sort {$a->total_charges <=>$b->total_charges} @$services_aref];
+    } else {
+        return undef;  # No services were
+    }
 }
-
-
 
 sub request_rate {
     my $self = shift;
@@ -265,6 +275,10 @@ sub request_rate {
     if ( $args->{exclude} && $args->{limit_to} ) {
         croak "request_rate(): usage error. You cannot use both 'limit_to' and 'exclude' at the same time";
     }
+    unless (scalar(@$packages)) {
+        return $self->set_error( "request_rate() was given an empty list of packages!" );
+    }
+
     for (my $i=0; $i < @$packages; $i++ ) {
         $packages->[$i]->id( $i + 1 );
     }
