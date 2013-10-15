@@ -392,7 +392,7 @@ sub validate_address {
     my ($address, $args) = @_;
 
     croak "verify_address(): usage error" unless defined($address);
-    
+
     unless ( ref $address ) {
         $address = {postal_code => $address};
     }

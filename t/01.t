@@ -21,8 +21,8 @@ use_ok("Net::UPS::Address");
 use_ok("Net::UPS::Service");
 
 ok($ups, "Net::UPS instance created");
-can_ok($ups,    "live",         "instance",         "userid", 
-                "password",     "access_key",       "rate", 
+can_ok($ups,    "live",         "instance",         "userid",
+                "password",     "access_key",       "rate",
                 "service",      "shop_for_rates",   "validate_address",
                 "init",         "cache_life",       "cache_root");
 
@@ -54,7 +54,7 @@ $rate = $ups->rate($address_from, $address_to, \@packages);
 ok($rate && ref($rate) && (ref $rate eq 'ARRAY') && ($rate->[0]->isa("Net::UPS::Rate")) && ($rate->[1]->isa("Net::UPS::Rate")) );
 
 can_ok($rate->[0], "total_charges", "billing_weight", "rated_package", "service", "from", "to");
-ok(     ($rate->[0]->rated_package->length == 34) 
+ok(     ($rate->[0]->rated_package->length == 34)
     &&  ($rate->[0]->rated_package->width  == 24)
     &&  ($rate->[0]->rated_package->height == 1.5)
     &&  ($rate->[0]->rated_package->weight == 1)
@@ -75,7 +75,7 @@ ok(     ($rate->[0]->from->postal_code  ==  15241)
 
 
 my $services = $ups->shop_for_rates($address_from, $address_to, $package);
-ok(     $services 
+ok(     $services
     &&  ref($services)
     &&  (ref$services eq 'ARRAY')
     &&  $services->[0]->isa("Net::UPS::Service")
@@ -96,7 +96,7 @@ ok(     ($services->[0]->total_charges < $services->[1]->total_charges)
 
 # what happens if we rate multiple packages?
 $services = $ups->shop_for_rates($address_from, $address_to, \@packages);
-ok(     $services 
+ok(     $services
     &&  ref($services)
     &&  (ref$services eq 'ARRAY')
     &&  $services->[0]->isa("Net::UPS::Service")
