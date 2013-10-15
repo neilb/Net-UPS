@@ -165,7 +165,7 @@ sub is_oversized {
         return 0;
     }
 
-    my @sides = sort ($self->length, $self->width, $self->height);
+    my @sides = sort { $a <=> $b } ($self->length, $self->width, $self->height);
     my $len = pop(@sides);  # Get longest side
     my $girth = ((2 * $sides[0]) + (2 * $sides[1]));
     my $size = $len + $girth;
