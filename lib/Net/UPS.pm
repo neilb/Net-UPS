@@ -18,10 +18,10 @@ use Net::UPS::Package;
 $Net::UPS::VERSION      = '0.04';
 $Net::UPS::LIVE         = 0;
 
-sub RATE_TEST_PROXY () { 'https://wwwcie.ups.com/ups.app/xml/Rate'  }
-sub RATE_LIVE_PROXY () { 'https://www.ups.com/ups.app/xml/Rate'     }
-sub AV_TEST_PROXY   () { 'https://wwwcie.ups.com/ups.app/xml/AV'    }
-sub AV_LIVE_PROXY   () { 'https://www.ups.com/ups.app/xml/AV'       }
+sub RATE_TEST_PROXY () { 'https://wwwcie.ups.com/ups.app/xml/Rate'      }
+sub RATE_LIVE_PROXY () { 'https://onlinetools.ups.com/ups.app/xml/Rate' }
+sub AV_TEST_PROXY   () { 'https://wwwcie.ups.com/ups.app/xml/AV'        }
+sub AV_LIVE_PROXY   () { 'https://onlinetools.ups.com/ups.app/xml/AV'   }
 
 sub PICKUP_TYPES () {
     return {
@@ -152,6 +152,8 @@ sub _read_args_from_file {
 
     $self->{__args}->{customer_classification} = $args->{customer_classification} || $config{CustomerClassification};
     $self->{__args}->{ups_account_number}      = $args->{ups_account_number}      || $config{AccountNumber};
+    $self->{__args}->{rate_proxy} = $args->{rate_proxy} || $config{RateProxy};
+    $self->{__args}->{av_proxy} = $args->{av_proxy} || $config{AVProxy};
     $self->cache_life( $args->{cache_life} || $config{CacheLife} );
     $self->cache_root( $args->{cache_root} || $config{CacheRoot} );
 
@@ -159,8 +161,8 @@ sub _read_args_from_file {
 }
 
 sub init        {                                                       }
-sub rate_proxy  { $Net::UPS::LIVE ? RATE_LIVE_PROXY : RATE_TEST_PROXY   }
-sub av_proxy    { $Net::UPS::LIVE ? AV_LIVE_PROXY   : AV_TEST_PROXY     }
+sub rate_proxy  { return $_[0]->{__args}->{rate_proxy} || ($Net::UPS::LIVE ? RATE_LIVE_PROXY : RATE_TEST_PROXY) }
+sub av_proxy    { return $_[0]->{__args}->{av_proxy} || ($Net::UPS::LIVE ? AV_LIVE_PROXY   : AV_TEST_PROXY) }
 sub cache_life  { return $_[0]->{__args}->{cache_life} = $_[1]          }
 sub cache_root  { return $_[0]->{__args}->{cache_root} = $_[1]          }
 sub userid      { return $_[0]->{__userid}                              }
@@ -547,6 +549,16 @@ Enables caching, as well as defines the life of cache in minutes.
 =item cache_root
 
 File-system location of a cache data. Return value of L<tmpdir()|File::Spec/tempdir> is used as default location.
+
+=item av_proxy
+
+The URL to use to access the AV service. If you set this one, the
+L</live> setting will be ignored, and this URL always used.
+
+=item rate_proxy
+
+The URL to use to access the Rate service. If you set this one, the
+L</live> setting will be ignored, and this URL always used.
 
 =back
 
