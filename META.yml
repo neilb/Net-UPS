@@ -4,6 +4,7 @@ author:
   - 'Sherzod B. Ruzmetov <sherzodr@cpan.org>'
   - 'Gianni Ceccarelli <gianni.ceccarelli@net-a-porter.com>'
 build_requires:
+  File::Temp: 0
   Test::Deep: 0
   Test::Exception: 0
   Test::More: 0

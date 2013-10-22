@@ -30,6 +30,7 @@ my %WriteMakefileArgs = (
     "warnings" => 0
   },
   "TEST_REQUIRES" => {
+    "File::Temp" => 0,
     "Test::Deep" => 0,
     "Test::Exception" => 0,
     "Test::More" => 0,
