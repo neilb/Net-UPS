@@ -422,6 +422,7 @@ sub post {
     }
 
     my $user_agent  = LWP::UserAgent->new();
+    $user_agent->env_proxy;
     my $request     = HTTP::Request->new('POST', $url);
     $request->content( $content );
     my $response    = $user_agent->request( $request );
