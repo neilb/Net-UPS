@@ -3,6 +3,8 @@ Revision history for Perl extension Net::UPS.
 
 {{$NEXT}}
 
+0.05-TRIAL October 15, 2014
+
     * FIX RT #87852 fix default URLs and allow custom ones
     * FIX RT #20540 fix & test sizes sorting
     * FIX RT #24190 ignore warnings from UPS
