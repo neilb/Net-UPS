@@ -1,6 +1,6 @@
 package Net::UPS::Rate;
 {
-  $Net::UPS::Rate::VERSION = '0.05'; # TRIAL
+  $Net::UPS::Rate::VERSION = '0.06'; # TRIAL
 }
 {
   $Net::UPS::Rate::DIST = 'Net-UPS';
