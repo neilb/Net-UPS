@@ -5,6 +5,7 @@ use Moo;
 use Type::Params qw(compile);
 use Types::Standard qw(Int Object);
 use Net::UPS2::Types ':types';
+use Net::UPS2::Exception;
 use namespace::autoclean;
 use 5.10.0;
 
@@ -55,14 +56,23 @@ my %code_for_packaging_type = (
     UPS_10KG_BOX    => '25'
 );
 
-sub as_hash {
+sub linear_unit {
     state $argcheck = compile(Object);
     my ($self) = $argcheck->(@_);
 
-    my $measurement_system = $self->measurement_system || 'english';
+    $self->measurement_system eq 'metric' ? 'CM' : 'IN';
+}
 
-    my ($weight_measure,$length_measure)  = 
-        $self->measurement_system eq 'metric' ? ('KGS','CM') : ('LBS','IN');
+sub weight_unit {
+    state $argcheck = compile(Object);
+    my ($self) = $argcheck->(@_);
+
+    $self->measurement_system eq 'metric' ? 'KGS' : 'LBS';
+}
+
+sub as_hash {
+    state $argcheck = compile(Object);
+    my ($self) = $argcheck->(@_);
 
     my %data = (
         PackagingType       => {
@@ -73,7 +83,7 @@ sub as_hash {
     if ( $self->length || $self->width || $self->height ) {
         $data{Dimensions} = {
             UnitOfMeasurement => {
-                Code => $length_measure
+                Code => $self->linear_unit,
             }
         };
 
@@ -91,7 +101,7 @@ sub as_hash {
     if ( $self->weight ) {
         $data{PackageWeight} = {
             UnitOfMeasurement => {
-                Code => $weight_measure
+                Code => $self->weight_unit,
             },
             Weight => $self->weight,
         };
@@ -135,7 +145,7 @@ sub is_oversized {
                   419, 40 );
 
     if ($len > $max_len or $self->weight > $max_weight or $size > $max_size) {
-        die "Such package size/weight is not supported";
+        Net::UPS2::Exception::BadPackage->throw({package=>$self});
     }
 
     return 0 if ( $size <= $min_size ); # Below OS1

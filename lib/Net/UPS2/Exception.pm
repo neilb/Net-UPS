@@ -23,6 +23,45 @@ around _build_stack_trace_args => sub {
 
 sub as_string { "something bad happened at ". $_[0]->stack_trace }
 
+{package Net::UPS2::Exception::ConfigError;
+ use strict;
+ use warnings;
+ use Moo;
+ extends 'Net::UPS2::Exception';
+
+ has file => ( is => 'ro', required => 1 );
+
+ sub as_string {
+     my ($self) = @_;
+
+     return 'Bad config file: %s, at %s',
+         $self->file,
+         $self->stack_trace;
+ }
+}
+
+{package Net::UPS2::Exception::BadPackage;
+ use strict;
+ use warnings;
+ use Moo;
+ extends 'Net::UPS2::Exception';
+
+ has package => ( is => 'ro', required => 1 );
+
+ sub as_string {
+     my ($self) = @_;
+
+     return 'Package size/weight not supported: %fx%fx%f %s %f %s, at %s',
+         $self->package->length,
+         $self->package->width,
+         $self->package->height,
+         $self->package->linear_unit,
+         $self->package->weight,
+         $self->package->weight_unit,
+         $self->stack_trace;
+ }
+}
+
 {package Net::UPS2::Exception::HTTPError;
  use strict;
  use warnings;

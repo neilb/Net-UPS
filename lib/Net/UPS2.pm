@@ -153,7 +153,9 @@ sub _load_config_file {
         flatten_to_hash => 1,
     });
     my $config = $loaded->{$file};
-    die "Bad config file $file" unless $config;
+    Net::UPS2::Exception::ConfigError->throw({
+        file => $file,
+    }) unless $config;
     return $config;
 }
 
