@@ -2,6 +2,8 @@ Revision history for Perl extension Net::UPS.
 ==============================================
 
 {{$NEXT}}
+
+0.07 October 24, 2013
    * honour proxy environment variables
 
 0.06 October 22, 2013
