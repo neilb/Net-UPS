@@ -8,10 +8,12 @@ use Type::Params qw(compile);
 use Net::UPS2::Types ':types';
 use Net::UPS2::Exception;
 use Try::Tiny;
-use List::AllUtils 'zip';
+use List::AllUtils 'pairwise';
 use HTTP::Request;
 use Encode;
 use namespace::autoclean;
+use Net::UPS2::Rate;
+use Net::UPS2::Service;
 use 5.10.0;
 
 # ABSTRACT: attempt to re-implement Net::UPS with modern insides
@@ -39,12 +41,12 @@ has live_mode => (
     is => 'rw',
     isa => Bool,
     trigger => 1,
+    default => sub { 0 },
 );
 
 has base_url => (
-    is => 'ro',
+    is => 'lazy',
     isa => Str,
-    lazy => 1,
     clearer => '_clear_base_url',
 );
 
@@ -94,9 +96,8 @@ has pickup_type => (
 
 
 has cache => (
-    is => 'ro',
+    is => 'lazy',
     isa => Cache,
-    lazy => 1,
 );
 sub _build_cache {
     require CHI;
@@ -109,9 +110,8 @@ sub _build_cache {
 }
 
 has user_agent => (
-    is => 'ro',
+    is => 'lazy',
     isa => UserAgent,
-    lazy => 1,
 );
 sub _build_user_agent {
     require LWP::UserAgent;
@@ -220,13 +220,16 @@ sub request_rate {
     my $response = $self->xml_request({
         data => \%request,
         url_suffix => '/Rate',
+        XMLin => {
+            ForceArray => [ 'RatedPackage', 'RatedShipment' ],
+        },
     });
 
     # default to "all allowed"
-    my %ok_labels = map { $_ => 1 } ServiceCode->values;
+    my %ok_labels = map { $_ => 1 } @{ServiceLabel->values};
     if ($args->{limit_to}) {
         # deny all, allow requested
-        %ok_labels = map { $_ => 0 } ServiceCode->values;
+        %ok_labels = map { $_ => 0 } @{ServiceLabel->values};
         $ok_labels{$_} = 1 for @{$args->{limit_to}};
     }
     elsif ($args->{exclude}) {
@@ -236,35 +239,39 @@ sub request_rate {
 
     my @services;
     for my $rated_shipment (@{$response->{RatedShipment}}) {
-        my $code = $rated_shipment->{Service}->{Code};
+        my $code = $rated_shipment->{Service}{Code};
         my $label = Net::UPS2::Service::label_for_code($code);
         next if not $ok_labels{$label};
 
         push @services, Net::UPS2::Service->new(
             code => $code,
             label => $label,
-            total_charges => $rated_shipment->{TotalCharges}->{MonetaryValue},
+            total_charges => $rated_shipment->{TotalCharges}{MonetaryValue},
             # TODO check this logic
-            guaranteed_days => ( ref($rated_shipment->{GuaranteedDaysToDelivery})
-                                     ? undef
-                                     : $rated_shipment->{GuaranteedDaysToDelivery} ),
+            ( ref($rated_shipment->{GuaranteedDaysToDelivery})
+                  ? ()
+                  : ( guaranteed_days => $rated_shipment->{GuaranteedDaysToDelivery} ) ),
             rated_packages => $packages,
             # TODO check this pairwise
             rates => [ pairwise {
-                Net::UPS::Rate->new({
-                    billing_weight  => $a->{BillingWeight}->{Weight},
-                    total_charges   => $a->{TotalCharges}->{MonetaryValue},
-                    weight          => $rated_shipment->{Weight},
+                Net::UPS2::Rate->new({
+                    billing_weight  => $a->{BillingWeight}{Weight},
+                    unit            => $a->{BillingWeight}{UnitOfMeasurement}{Code},
+                    total_charges   => $a->{TotalCharges}{MonetaryValue},
+                    total_charges_currency => $a->{TotalCharges}{CurrencyCode},
+                    weight          => $a->{Weight},
                     rated_package   => $b,
                     service         => $args->{service},
                     from            => $args->{from},
                     to              => $args->{to},
                 });
-            } zip @{$rated_shipment->{RatedPackage}},@$packages ],
+            } @{$rated_shipment->{RatedPackage}},@$packages ],
         );
     }
 
     # TODO caching goes here
+
+    # we should return warnings as well
     return \@services;
 }
 
@@ -280,9 +287,8 @@ sub xml_request {
     );
     my ($self, $args) = $argcheck->(@_);
 
-    # default XML::Simple args; TODO check these, request_rate has them different
+    # default XML::Simple args
     my $xmlargs = {
-        KeepRoot   => 0,
         NoAttr     => 1,
         KeyAttr    => [],
     };
@@ -292,7 +298,7 @@ sub xml_request {
             XMLout(
                 $args->{data},
                 %{ $xmlargs },
-                XMLDecl     => 0,
+                XMLDecl     => 1,
                 KeepRoot    => 1,
                 %{ $args->{XMLout}||{} },
             );
@@ -305,8 +311,10 @@ sub xml_request {
         %{ $args->{XMLin} },
     );
 
-    if (my $error = $response->{Response}{Error}) {
-        Net::UPS2::Exception::UPSError->throw({error=>$error});
+    if ($response->{Response}{ResponseStatusCode}==0) {
+        Net::UPS2::Exception::UPSError->throw({
+            error => $response->{Response}{Error}
+        });
     }
 
     return $response;

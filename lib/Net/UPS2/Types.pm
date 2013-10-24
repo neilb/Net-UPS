@@ -7,7 +7,9 @@ use Type::Library
                     Cache UserAgent
                     Address Package PackageList
                     RequestMode Service
-                    ServiceCode
+                    ServiceCode ServiceLabel
+                    PackagingType MeasurementSystem
+                    Measure MeasurementUnit Currency
               );
 use Type::Utils -all;
 use Types::Standard -types;
@@ -43,6 +45,22 @@ enum RequestMode, # there are probably more
 
 enum ServiceCode,
     [qw(
+           01
+           02
+           03
+           07
+           08
+           11
+           12
+           12
+           13
+           14
+           54
+           59
+   )];
+
+enum ServiceLabel,
+    [qw(
         NEXT_DAY_AIR
         2ND_DAY_AIR
         GROUND
@@ -56,6 +74,46 @@ enum ServiceCode,
         WORLDWIDE_EXPRESS_PLUS
         2ND_DAY_AIR_AM
    )];
+
+enum PackagingType,
+    [qw(
+        LETTER
+        PACKAGE
+        TUBE
+        UPS_PAK
+        UPS_EXPRESS_BOX
+        UPS_25KG_BOX
+        UPS_10KG_BOX
+   )];
+
+enum MeasurementSystem,
+    [qw(
+           metric
+           english
+   )];
+
+enum MeasurementUnit,
+    [qw(
+           LBS
+           KGS
+           IN
+           CM
+   )];
+
+declare Currency,
+    as Str;
+
+declare Measure,
+    as StrictNum,
+    where { $_ >= 0 },
+    inline_as {
+        my ($constraint, $varname) = @_;
+        my $perlcode =
+            $constraint->parent->inline_check($varname)
+                . "&& ($varname >= 0)";
+        return $perlcode;
+    },
+    message { ($_//'<undef>').' is not a valid measure, it must be a non-negative number' };
 
 class_type Address, { class => 'Net::UPS2::Address' };
 coerce Address, from Str, via {
@@ -71,7 +129,7 @@ coerce PackageList, from Package, via { [ $_ ] };
 class_type Service, { class => 'Net::UPS2::Service' };
 coerce Service, from Str, via {
     require Net::UPS2::Service;
-    Net::UPS2::Service->new_from_label($_);
+    Net::UPS2::Service->new({label=>$_});
 };
 
 
