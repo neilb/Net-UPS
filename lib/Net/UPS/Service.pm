@@ -1,6 +1,6 @@
 package Net::UPS::Service;
 {
-  $Net::UPS::Service::VERSION = '0.06'; # TRIAL
+  $Net::UPS::Service::VERSION = '0.07';
 }
 {
   $Net::UPS::Service::DIST = 'Net-UPS';

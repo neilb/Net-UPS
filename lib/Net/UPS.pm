@@ -1,6 +1,6 @@
 package Net::UPS;
 {
-  $Net::UPS::VERSION = '0.06'; # TRIAL
+  $Net::UPS::VERSION = '0.07';
 }
 {
   $Net::UPS::DIST = 'Net-UPS';
@@ -428,6 +428,7 @@ sub post {
     }
 
     my $user_agent  = LWP::UserAgent->new();
+    $user_agent->env_proxy;
     my $request     = HTTP::Request->new('POST', $url);
     $request->content( $content );
     my $response    = $user_agent->request( $request );

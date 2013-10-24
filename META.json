@@ -44,6 +44,7 @@
       },
       "test" : {
          "requires" : {
+            "Data::Printer" : "0",
             "File::Temp" : "0",
             "Test::Deep" : "0",
             "Test::Exception" : "0",
@@ -52,7 +53,7 @@
          }
       }
    },
-   "release_status" : "testing",
+   "release_status" : "stable",
    "resources" : {
       "repository" : {
          "type" : "git",
@@ -60,6 +61,6 @@
          "web" : "https://github.com/NET-A-PORTER/Net-UPS.git"
       }
    },
-   "version" : "0.06"
+   "version" : "0.07"
 }
 

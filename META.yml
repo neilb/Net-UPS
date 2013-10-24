@@ -4,6 +4,7 @@ author:
   - 'Sherzod B. Ruzmetov <sherzodr@cpan.org>'
   - 'Gianni Ceccarelli <gianni.ceccarelli@net-a-porter.com>'
 build_requires:
+  Data::Printer: 0
   File::Temp: 0
   Test::Deep: 0
   Test::Exception: 0
@@ -32,4 +33,4 @@ requires:
   warnings: 0
 resources:
   repository: git://github.com/NET-A-PORTER/Net-UPS.git
-version: 0.06
+version: 0.07
