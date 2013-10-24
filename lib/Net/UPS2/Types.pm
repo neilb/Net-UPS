@@ -4,7 +4,7 @@ use warnings;
 use Type::Library
     -base,
     -declare => qw( PickupType CustomerClassification
-                    Cache
+                    Cache UserAgent
                     Address Package PackageList
                     RequestMode Service
                     ServiceCode
@@ -65,7 +65,7 @@ coerce Address, from Str, via {
 
 class_type Package, { class => 'Net::UPS2::Package' };
 
-declare PackageList, as ArrayRey[Package];
+declare PackageList, as ArrayRef[Package];
 coerce PackageList, from Package, via { [ $_ ] };
 
 class_type Service, { class => 'Net::UPS2::Service' };
@@ -76,5 +76,6 @@ coerce Service, from Str, via {
 
 
 duck_type Cache, [qw(get set)];
+duck_type UserAgent, [qw(request)];
 
 1;

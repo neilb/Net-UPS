@@ -3,14 +3,16 @@ use strict;
 use warnings;
 use Moo;
 use XML::Simple;
-use Types::Standard qw(Str Bool Object Dict Optional);
+use Types::Standard qw(Str Bool Object Dict Optional ArrayRef HashRef);
 use Type::Params qw(compile);
 use Net::UPS2::Types ':types';
 use Net::UPS2::Exception;
 use Try::Tiny;
 use List::AllUtils 'zip';
+use HTTP::Request;
+use Encode;
 use namespace::autoclean;
-use 5.8.1;
+use 5.10.0;
 
 # ABSTRACT: attempt to re-implement Net::UPS with modern insides
 
@@ -106,6 +108,18 @@ sub _build_cache {
     );
 }
 
+has user_agent => (
+    is => 'ro',
+    isa => UserAgent,
+    lazy => 1,
+);
+sub _build_user_agent {
+    require LWP::UserAgent;
+    return LWP::UserAgent->new(
+        env_proxy => 1,
+    );
+}
+
 sub BUILDARGS {
     my ($class,@args) = @_;
 
@@ -133,13 +147,13 @@ sub BUILDARGS {
 sub _load_config_file {
     my ($file) = @_;
     require Config::Any;
-    my %loaded = Config::Any->load_files({
+    my $loaded = Config::Any->load_files({
         files => [$file],
         use_ext => 1,
         flatten_to_hash => 1,
     });
-    my $config = $loaded{$file};
-    croak "Bad config file $file" unless $config;
+    my $config = $loaded->{$file};
+    die "Bad config file $file" unless $config;
     return $config;
 }
 
@@ -191,8 +205,8 @@ sub request_rate {
             Shipment    => {
                 Service     => { Code   => $args->{service}->code },
                 Package     => [map { $_->as_hash() } @$packages],
-                Shipper     => $from->as_hash(),
-                ShipTo      => $to->as_hash(),
+                Shipper     => $args->{from}->as_hash(),
+                ShipTo      => $args->{to}->as_hash(),
                 ( $self->account_number ? (
                     Shipper => { ShipperNumber => $self->account_number }
                 ) : () ),
@@ -233,14 +247,14 @@ sub request_rate {
             # TODO check this logic
             guaranteed_days => ( ref($rated_shipment->{GuaranteedDaysToDelivery})
                                      ? undef
-                                     : $ref->{GuaranteedDaysToDelivery} ),
+                                     : $rated_shipment->{GuaranteedDaysToDelivery} ),
             rated_packages => $packages,
             # TODO check this pairwise
             rates => [ pairwise {
                 Net::UPS::Rate->new({
                     billing_weight  => $a->{BillingWeight}->{Weight},
                     total_charges   => $a->{TotalCharges}->{MonetaryValue},
-                    weight          => $rated_packages->{Weight},
+                    weight          => $rated_shipment->{Weight},
                     rated_package   => $b,
                     service         => $args->{service},
                     from            => $args->{from},
@@ -266,7 +280,7 @@ sub xml_request {
     );
     my ($self, $args) = $argcheck->(@_);
 
-    # default XML::Simple args;
+    # default XML::Simple args; TODO check these, request_rate has them different
     my $xmlargs = {
         KeepRoot   => 0,
         NoAttr     => 1,
@@ -277,7 +291,7 @@ sub xml_request {
         $self->access_as_xml .
             XMLout(
                 $args->{data},
-                %{ $attr },
+                %{ $xmlargs },
                 XMLDecl     => 0,
                 KeepRoot    => 1,
                 %{ $args->{XMLout}||{} },
@@ -287,7 +301,7 @@ sub xml_request {
 
     my $response = XMLin(
         $response_string,
-        %{ $attr },
+        %{ $xmlargs },
         %{ $args->{XMLin} },
     );
 
@@ -297,3 +311,26 @@ sub xml_request {
 
     return $response;
 }
+
+sub post {
+    state $argcheck = compile( Object, Str, Str );
+    my ($self, $url_suffix, $body) = $argcheck->(@_);
+
+    my $url = $self->base_url . $url_suffix;
+    my $request = HTTP::Request->new(
+        POST => $url,
+        [], encode('utf-8',$body),
+    );
+    my $response = $self->user_agent->request($request);
+
+    if ($response->is_error) {
+        Net::UPS2::Exception::HTTPError->throw({
+            request=>$request,
+            response=>$response,
+        });
+    }
+
+    return $response->decoded_content(default_charset=>'utf-8',raise_error=>1);
+}
+
+1;
