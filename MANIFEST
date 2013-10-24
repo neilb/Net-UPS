@@ -17,7 +17,6 @@ lib/Net/UPS/Tutorial.pm
 t/01.t
 t/02address.t
 t/custom-url.t
-t/fail.t
 t/missing-sizes.t
 t/oversized.t
 t/release-no-tabs.t

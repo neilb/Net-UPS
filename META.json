@@ -44,7 +44,6 @@
       },
       "test" : {
          "requires" : {
-            "Data::Printer" : "0",
             "File::Temp" : "0",
             "Test::Deep" : "0",
             "Test::Exception" : "0",
