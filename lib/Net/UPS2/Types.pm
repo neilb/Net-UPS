@@ -57,6 +57,11 @@ enum ServiceCode,
            14
            54
            59
+           65
+           86
+           85
+           83
+           82
    )];
 
 enum ServiceLabel,
@@ -73,6 +78,11 @@ enum ServiceLabel,
         NEXT_DAY_AIR_EARLY_AM
         WORLDWIDE_EXPRESS_PLUS
         2ND_DAY_AIR_AM
+        SAVER
+        TODAY_EXPRESS_SAVER
+        TODAY_EXPRESS
+        TODAY_DEDICATED_COURIER
+        TODAY_STANDARD
    )];
 
 enum PackagingType,

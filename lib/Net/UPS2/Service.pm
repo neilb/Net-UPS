@@ -49,7 +49,12 @@ my %code_for_label = (
     NEXT_DAY_AIR_SAVER      => '13',
     NEXT_DAY_AIR_EARLY_AM   => '14',
     WORLDWIDE_EXPRESS_PLUS  => '54',
-    '2ND_DAY_AIR_AM'        => '59'
+    '2ND_DAY_AIR_AM'        => '59',
+    SAVER                   => '65',
+    TODAY_EXPRESS_SAVER     => '86',
+    TODAY_EXPRESS           => '85',
+    TODAY_DEDICATED_COURIER => '83',
+    TODAY_STANDARD          => '82',
 );
 my %label_for_code = reverse %code_for_label;
 
