@@ -2,16 +2,34 @@
 use strict;
 use warnings;
 use 5.10.0;
+use lib 't/lib';
 use Test::Most;
 use Net::UPS2;
 use Net::UPS2::Address;
 use File::Spec;
 use Try::Tiny;
+use Sub::Override;
 use Data::Printer;
+use Test::Net::UPS2::TestCache;
 
+my $orig_post = \&Net::UPS2::post;
+my @calls;
+my $new_post = Sub::Override->new(
+    'Net::UPS2::post',
+    sub {
+        note "my post";
+        push @calls,[@_];
+        $orig_post->(@_);
+    }
+);
+
+my $cache = Test::Net::UPS2::TestCache->new();
 my $upsrc = File::Spec->catfile($ENV{HOME}, '.upsrc.conf');
 my $ups = try {
-    Net::UPS2->new($upsrc);
+    Net::UPS2->new({
+        config_file => $upsrc,
+        cache => $cache,
+    });
 }
 catch {
     plan(skip_all=>$_);
@@ -44,6 +62,15 @@ cmp_deeply($addresses->addresses,
            ),
            'address validated',
 ) or p $addresses;
+cmp_deeply(\@calls,
+           [[ $ups,'/AV',ignore() ]],
+           'one call to the service');
+
+my $addresses2 = $ups->validate_address($address);
+cmp_deeply($addresses2,$addresses,'the same answer');
+cmp_deeply(\@calls,
+           [[ $ups,'/AV',ignore() ]],
+           'still only one call to the service');
 
 done_testing();
 

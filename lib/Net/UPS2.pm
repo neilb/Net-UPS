@@ -197,14 +197,16 @@ sub request_rate {
     my $packages = $args->{packages};
     { my $pack_id=0; $_->id(++$pack_id) for @$packages }
 
-    my $cache_key = $self->generate_cache_key([
-        $args->{from},$args->{to},@$packages,
-    ],{
-        mode => $args->{mode},
-        service => $args->{service}->code,
-        pickup_type => $self->pickup_type,
-        customer_classification => $self->customer_classification,
-    });
+    my $cache_key = $self->generate_cache_key(
+        'rate',
+        [ $args->{from},$args->{to},@$packages, ],
+        {
+            mode => $args->{mode},
+            service => $args->{service}->code,
+            pickup_type => $self->pickup_type,
+            customer_classification => $self->customer_classification,
+        },
+    );
     if (my $cached_services = $self->cache->get($cache_key)) {
         return $cached_services;
     }
@@ -320,6 +322,15 @@ sub validate_address {
         },
     );
 
+    my $cache_key = $self->generate_cache_key(
+        'AV',
+        [ $address ],
+        { tolerance => $tolerance },
+    );
+    if (my $cached_services = $self->cache->get($cache_key)) {
+        return $cached_services;
+    }
+
     my $response = $self->xml_request({
         data => \%data,
         url_suffix => '/AV',
@@ -347,6 +358,8 @@ sub validate_address {
         addresses => \@addresses,
         ( $response->{Error} ? (warnings => $response->{Error}) : () ),
     });
+
+    $self->cache->set($cache_key,$ret);
 
     return $ret;
 }
@@ -418,10 +431,11 @@ sub post {
 }
 
 sub generate_cache_key {
-    state $argcheck = compile(Object, ArrayRef[Cacheable],Optional[HashRef]);
-    my ($self,$things,$args) = $argcheck->(@_);
+    state $argcheck = compile(Object, Str, ArrayRef[Cacheable],Optional[HashRef]);
+    my ($self,$kind,$things,$args) = $argcheck->(@_);
 
     return join ':',
+        $kind,
         ( map { $_->cache_id } @$things ),
         ( map {
             sprintf '%s:%s',
