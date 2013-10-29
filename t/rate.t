@@ -56,13 +56,13 @@ my $argpack = {
 };
 
 my $services = $ups->request_rate($argpack);
-ok($services && @$services,'got answer');
+ok($services && @{$services->services},'got answer');
 cmp_deeply(\@calls,
            [[ $ups,'/Rate',ignore() ]],
            'one call to the service');
 
 my $services2 = $ups->request_rate($argpack);
-ok($services2 && @$services2,'got answer again');
+ok($services2 && @{$services2->services},'got answer again');
 cmp_deeply($services2,$services,'the same answer');
 cmp_deeply(\@calls,
            [[ $ups,'/Rate',ignore() ]],

@@ -28,7 +28,7 @@ my $address = Net::UPS2::Address->new({
 
 my $addresses = $ups->validate_address($address);
 
-cmp_deeply($addresses,
+cmp_deeply($addresses->addresses,
            array_each(
                all(
                    isa('Net::UPS2::Address'),

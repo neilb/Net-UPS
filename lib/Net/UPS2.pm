@@ -13,7 +13,10 @@ use HTTP::Request;
 use Encode;
 use namespace::autoclean;
 use Net::UPS2::Rate;
+use Net::UPS2::Address;
 use Net::UPS2::Service;
+use Net::UPS2::Response::Rate;
+use Net::UPS2::Response::Address;
 use 5.10.0;
 
 # ABSTRACT: attempt to re-implement Net::UPS with modern insides
@@ -284,10 +287,14 @@ sub request_rate {
     }
     @services = sort { $a->total_charges <=> $b->total_charges } @services;
 
-    $self->cache->set($cache_key,\@services);
+    my $ret = Net::UPS2::Response::Rate->new({
+        services => \@services,
+        ( $response->{Error} ? (warnings => $response->{Error}) : () ),
+    });
 
-    # we should return warnings as well
-    return \@services;
+    $self->cache->set($cache_key,$ret);
+
+    return $ret;
 }
 
 sub validate_address {
@@ -335,7 +342,13 @@ sub validate_address {
         }
     }
 
-    return \@addresses;
+
+    my $ret = Net::UPS2::Response::Address->new({
+        addresses => \@addresses,
+        ( $response->{Error} ? (warnings => $response->{Error}) : () ),
+    });
+
+    return $ret;
 }
 
 sub xml_request {
