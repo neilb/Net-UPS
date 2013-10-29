@@ -5,6 +5,7 @@ use Moo;
 use XML::Simple;
 use Types::Standard qw(Str Bool Object Dict Optional ArrayRef HashRef Undef);
 use Type::Params qw(compile);
+use Error::TypeTiny;
 use Net::UPS2::Types qw(:types to_Service);
 use Net::UPS2::Exception;
 use Try::Tiny;
@@ -33,12 +34,20 @@ my %code_for_pickup_type = (
     LETTER_CENTER           => '19',
     AIR_SERVICE_CENTER      => '20'
 );
+sub _pickup_types { return {%code_for_pickup_type} }
 
 my %code_for_customer_classification = (
     WHOLESALE               => '01',
     OCCASIONAL              => '03',
     RETAIL                  => '04'
 );
+sub _customer_classification { return {%code_for_customer_classification} }
+
+my %base_urls = (
+    live => 'https://onlinetools.ups.com/ups.app/xml',
+    test => 'https://wwwcie.ups.com/ups.app/xml',
+);
+sub _base_urls { return {%base_urls} }
 
 has live_mode => (
     is => 'rw',
@@ -61,9 +70,7 @@ sub _trigger_live_mode {
 sub _build_base_url {
     my ($self) = @_;
 
-    return $self->live_mode
-        ? 'https://onlinetools.ups.com/ups.app/xml'
-        : 'https://wwwcie.ups.com/ups.app/xml';
+    return $base_urls{$self->live_mode ? 'live' : 'test'};
 }
 
 has user_id => (
@@ -203,7 +210,16 @@ sub request_rate {
     $args->{mode} ||= 'rate';
     $args->{service} ||= to_Service('GROUND');
 
+    if ( $args->{exclude} && $args->{limit_to} ) {
+        Error::TypeTiny::croak("You cannot use both 'limit_to' and 'exclude' at the same time");
+    }
+
     my $packages = $args->{packages};
+
+    unless (scalar(@$packages)) {
+        Error::TypeTiny::croak("request_rate() was given an empty list of packages");
+    }
+
     { my $pack_id=0; $_->id(++$pack_id) for @$packages }
 
     my $cache_key;
@@ -274,7 +290,7 @@ sub request_rate {
         my $label = Net::UPS2::Service::label_for_code($code);
         next if not $ok_labels{$label};
 
-        push @services, Net::UPS2::Service->new(
+        push @services, my $service = Net::UPS2::Service->new({
             code => $code,
             label => $label,
             total_charges => $rated_shipment->{TotalCharges}{MonetaryValue},
@@ -292,12 +308,14 @@ sub request_rate {
                     total_charges_currency => $a->{TotalCharges}{CurrencyCode},
                     weight          => $a->{Weight},
                     rated_package   => $b,
-                    service         => $args->{service},
                     from            => $args->{from},
                     to              => $args->{to},
                 });
             } @{$rated_shipment->{RatedPackage}},@$packages ],
-        );
+        });
+
+        # fixup service-rate-service refs
+        $_->_set_service($service) for @{$service->rates};
     }
     @services = sort { $a->total_charges <=> $b->total_charges } @services;
 

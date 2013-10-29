@@ -37,9 +37,10 @@ has rated_package => (
 );
 
 has service => (
-    is => 'ro',
+    is => 'rwp',
     isa => Service,
-    required => 1,
+    weak_ref => 1,
+    required => 0,
 );
 
 has from => (

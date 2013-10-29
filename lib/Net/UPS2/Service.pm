@@ -23,12 +23,12 @@ has total_charges => (
 );
 has rates => (
     is => 'ro',
-    isa => ArrayRef, # TODO of what?
+    isa => RateList,
     required => 0,
 );
 has rated_packages => (
     is => 'ro',
-    isa => ArrayRef, # TODO of what?
+    isa => PackageList,
     required => 0,
 );
 has guaranteed_days => (

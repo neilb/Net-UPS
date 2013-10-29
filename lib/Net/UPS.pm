@@ -1,47 +1,27 @@
 package Net::UPS;
 use strict;
 use warnings;
-use Carp ('croak');
-use XML::Simple;
-use LWP::UserAgent;
 use Net::UPS::ErrorHandler;
 use Net::UPS::Rate;
 use Net::UPS::Service;
 use Net::UPS::Address;
 use Net::UPS::Package;
-
+use Net::UPS2;
+use Net::UPS2::Types ':to';
+use Try::Tiny;
+use Carp qw(croak confess);
 
 @Net::UPS::ISA          = ( "Net::UPS::ErrorHandler" );
 $Net::UPS::LIVE         = 0;
 
-sub RATE_TEST_PROXY () { 'https://wwwcie.ups.com/ups.app/xml/Rate'      }
-sub RATE_LIVE_PROXY () { 'https://onlinetools.ups.com/ups.app/xml/Rate' }
-sub AV_TEST_PROXY   () { 'https://wwwcie.ups.com/ups.app/xml/AV'        }
-sub AV_LIVE_PROXY   () { 'https://onlinetools.ups.com/ups.app/xml/AV'   }
+sub RATE_TEST_PROXY () { Net::UPS2::_base_urls->{test}.'/Rate' }
+sub RATE_LIVE_PROXY () { Net::UPS2::_base_urls->{live}.'/Rate' }
+sub AV_TEST_PROXY   () { Net::UPS2::_base_urls->{test}.'/AV' }
+sub AV_LIVE_PROXY   () { Net::UPS2::_base_urls->{live}.'/AV' }
 
-sub PICKUP_TYPES () {
-    return {
-        DAILY_PICKUP            => '01',
-        DAILY                   => '01',
-        CUSTOMER_COUNTER        => '03',
-        ONE_TIME_PICKUP         => '06',
-        ONE_TIME                => '06',
-        ON_CALL_AIR             => '07',
-        SUGGESTED_RETAIL        => '11',
-        SUGGESTED_RETAIL_RATES  => '11',
-        LETTER_CENTER           => '19',
-        AIR_SERVICE_CENTER      => '20'
-    };
-}
+sub PICKUP_TYPES () { Net::UPS2::_pickup_types }
 
-sub CUSTOMER_CLASSIFICATION () {
-    return {
-        WHOLESALE               => '01',
-        OCCASIONAL              => '03',
-        RETAIL                  => '04'
-    };
-}
-
+sub CUSTOMER_CLASSIFICATION () { Net::UPS2::_customer_classification }
 
 sub import {
     my $class = shift;
@@ -53,7 +33,6 @@ sub import {
     $Net::UPS::LIVE = $args->{live} || 0;
 }
 
-
 sub live {
     my $class = shift;
     unless ( @_ ) {
@@ -61,8 +40,6 @@ sub live {
     }
     $Net::UPS::LIVE = shift;
 }
-
-
 
 my $ups = undef;
 sub new {
@@ -72,56 +49,69 @@ sub new {
     unless ( (@_ >= 1) || (@_ <= 4) ) {
         croak "new(): invalid number of arguments";
     }
-    $ups = bless({
-        __userid      => $_[0] || undef,
-        __password    => $_[1] || undef,
-        __access_key  => $_[2] || undef,
-        __args        => $_[3] || {},
-        __last_service=> undef
-    }, $class);
+    my $args = {
+        user_id => $_[0] || undef,
+        password => $_[1] || undef,
+        access_key  => $_[2] || undef,
+        %{ $_[3] || {} },
+    };
 
     if ( @_ < 3 ) {
-        $ups->_read_args_from_file(@_) or return undef;
+        my $args_from_file = $class->_read_args_from_file(@_) or return undef;
+        $args = { %$args, %$args_from_file };
     }
 
-    unless ( $ups->userid && $ups->password && $ups->access_key ) {
+    unless ( $args->{user_id} && $args->{password} && $args->{access_key} ) {
         croak "new(): usage error. Required arguments missing";
     }
-    if ( my $cache_life = $ups->{__args}->{cache_life} ) {
-        eval "require Cache::File";
-        if (my $errstr = $@ ) {
-            croak "'cache_life' requires Cache::File module";
+
+    if ($args->{av_proxy} or $args->{rate_proxy}) {
+        my %base;my %ext = (av=>'/AV',rate=>'/Rate');
+        for my $serv (qw(av rate)) {
+            if ($args->{"${serv}_proxy"}) {
+                my $ext = $ext{$serv};
+                ($base{$serv}) =
+                    $args->{"${serv}_proxy"} =~ m{^(http.*?)\Q$ext\E$};
+                if (not $base{$serv}) {
+                    croak "bad $serv override url: ".$args->{"${serv}_proxy"};
+                }
+            }
         }
-        unless ( $ups->{__args}->{cache_root} ) {
-            require File::Spec;
-            $ups->{__args}->{cache_root} = File::Spec->catdir(File::Spec->tmpdir, 'net_ups');
+        if (values %base == 1) {
+            croak "you must override both AV and Rate proxies";
         }
-        $ups->{__cache} = Cache::File->new( cache_root      => $ups->{__args}->{cache_root},
-                                            default_expires => "$cache_life m",
-                                            cache_depth     => 5,
-                                            lock_level      => Cache::File::LOCK_LOCAL()
-                                            );
+        if ($base{av} ne $base{rate}) {
+            croak "overridden AV and Rate proxies must refer to the same server";
+        }
+        $args->{base_url} = $base{av};
     }
-    $ups->init();
+
+    $ups = bless {
+        delegate => Net::UPS2->new($args),
+        last_service => undef,
+    }, $class;
+
     return $ups;
 }
-
-
-
-
 
 sub instance {
     return $ups if defined($ups);
     croak "instance(): no object instance found";
 }
 
-
-
-
+my %field_map = (
+    UserID => 'user_id',
+    Password => 'password',
+    AccessKey => 'access_key',
+    CustomerClassification => 'customer_classification',
+    AccountNumber => 'account_number',
+    CacheLife => 'cache_life',
+    CacheRoot => 'cache_root',
+    RateProxy => 'rate_proxy',
+    AVProxy => 'av_proxy',
+);
 sub _read_args_from_file {
-    my $self = shift;
-    my ($path, $args) = @_;
-    $args ||= {};
+    my ($self,$path) = @_;
 
     unless ( defined $path ) {
         croak "_read_args_from_file(): required arguments are missing";
@@ -141,78 +131,48 @@ sub _read_args_from_file {
     unless ( $config{UserID} && $config{Password} && $config{AccessKey} ) {
         return $self->set_error( "_read_args_from_file(): required arguments are missing" );
     }
-    $self->{__userid}       = $config{UserID};
-    $self->{__password}     = $config{Password};
-    $self->{__access_key}   = $config{AccessKey};
 
+    my %ret;
+    for my $src (keys %field_map) {
+        next unless exists $config{$src};
+        my $dst = $field_map{$src};
 
-    $self->{__args}->{customer_classification} = $args->{customer_classification} || $config{CustomerClassification};
-    $self->{__args}->{ups_account_number}      = $args->{ups_account_number}      || $config{AccountNumber};
-    $self->{__args}->{rate_proxy} = $args->{rate_proxy} || $config{RateProxy};
-    $self->{__args}->{av_proxy} = $args->{av_proxy} || $config{AVProxy};
-    $self->cache_life( $args->{cache_life} || $config{CacheLife} );
-    $self->cache_root( $args->{cache_root} || $config{CacheRoot} );
+        $ret{$dst} = $config{$src};
+    }
 
-    return $self;
+    return \%ret;
 }
 
-sub init        {                                                       }
-sub rate_proxy  { return $_[0]->{__args}->{rate_proxy} || ($Net::UPS::LIVE ? RATE_LIVE_PROXY : RATE_TEST_PROXY) }
-sub av_proxy    { return $_[0]->{__args}->{av_proxy} || ($Net::UPS::LIVE ? AV_LIVE_PROXY   : AV_TEST_PROXY) }
-sub cache_life  { return $_[0]->{__args}->{cache_life} = $_[1]          }
-sub cache_root  { return $_[0]->{__args}->{cache_root} = $_[1]          }
-sub userid      { return $_[0]->{__userid}                              }
-sub password    { return $_[0]->{__password}                            }
-sub access_key  { return $_[0]->{__access_key}                          }
-sub account_number{return $_[0]->{__args}->{ups_account_number}         }
-sub customer_classification { return $_[0]->{__args}->{customer_classification} }
-sub dump        { return Dumper($_[0])                                  }
+sub init        { confess 'Net::UPS::init is no longer supported' }
+sub rate_proxy  { return $_[0]->{delegate}->base_url . '/Rate' }
+sub av_proxy    { return $_[0]->{delegate}->base_url . '/AV' }
+sub cache_life  { confess 'altering Net::UPS::cache_life is no longer supported' }
+sub cache_root  { confess 'altering Net::UPS::cache_root is no longer supported' }
+sub userid      { return $_[0]->{delegate}->user_id }
+sub password    { return $_[0]->{delegate}->password }
+sub access_key  { return $_[0]->{delegate}->access_key }
+sub account_number { return $_[0]->{delegate}->account_number }
+sub customer_classification { return $_[0]->{delegate}->customer_classification }
+sub dump        { confess 'Net::UPS::dump is no longer supported' }
 
-sub access_as_xml {
-    my $self = shift;
-    return XMLout({
-        AccessRequest => {
-            AccessLicenseNumber  => $self->access_key,
-            Password            => $self->password,
-            UserId              => $self->userid
-        }
-    }, NoAttr=>1, KeepRoot=>1, XMLDecl=>1);
-}
+sub access_as_xml { return $_[0]->{delegate}->access_as_xml }
 
-sub transaction_reference {
-    return {
-        CustomerContext => "Net::UPS",
-        XpciVersion     => '1.0001'
-    };
-}
+sub transaction_reference { return $_[0]->{delegate}->transaction_reference }
 
 sub rate {
     my $self = shift;
     my ($from, $to, $packages, $args) = @_;
     croak "rate(): usage error" unless ($from && $to && $packages);
 
-    unless ( ref $from ) {
-        $from = Net::UPS::Address->new(postal_code=>$from);
-    }
-    unless ( ref $to ) {
-        $to   = Net::UPS::Address->new(postal_code=>$to);
-    }
-    unless ( ref $packages eq 'ARRAY' ) {
-        $packages = [$packages];
-    }
-    $args                   ||= {};
-    $args->{mode}             = "rate";
-    $args->{service}        ||= "GROUND";
-
-    my $services = $self->request_rate($from, $to, $packages, $args);
+    my $services = $self->request_rate($from, $to, $packages, $args || {});
     return if !defined $services;
-    if ( @$packages == 1 ) {
+
+    if ( ref($packages) ne 'ARRAY' or @$packages == 1 ) {
         return $services->[0]->rates()->[0];
     }
 
     return $services->[0]->rates();
 }
-
 
 sub shop_for_rates {
     my $self = shift;
@@ -221,30 +181,12 @@ sub shop_for_rates {
     unless ( $from && $to && $packages ) {
         croak "shop_for_rates(): usage error";
     }
-    unless ( ref $from ) {
-        $from = Net::UPS::Address->new(postal_code=>$from);
-    }
-    unless ( ref $to ) {
-        $to =  Net::UPS::Address->new(postal_code=>$to);
-    }
-    unless ( ref $packages eq 'ARRAY' ) {
-        $packages = [$packages];
-    }
-    $args           ||= {};
-    $args->{mode}     = "shop";
-    $args->{service}||= "GROUND";
 
-    # Scoob correction Aug 19th 2006 / cpan@pickledbrain.com
-    # There was a Perl run time error when no rates were found
-    # (empty package list, bad zip code etc...)
-    # request_rate() can now return undef in case of errors.
-    ####
-    my $services_aref = $self->request_rate($from, $to, $packages, $args);
-    if (defined $services_aref) {
-        return [sort {$a->total_charges <=>$b->total_charges} @$services_aref];
-    } else {
-        return undef;  # No services were
-    }
+    $args->{mode} = "shop";
+    my $services = $self->request_rate($from, $to, $packages, $args || {});
+    return undef if !defined $services;
+
+    return $services;
 }
 
 sub request_rate {
@@ -252,188 +194,38 @@ sub request_rate {
     my ($from, $to, $packages, $args) = @_;
 
     croak "request_rate(): usage error" unless ($from && $to && $packages && $args);
-    unless (ref($from) && $from->isa("Net::UPS::Address")&&
-            ref($to) && $to->isa("Net::UPS::Address") &&
-            ref($packages) && (ref $packages eq 'ARRAY') &&
-            ref($args) && (ref $args eq 'HASH')) {
-        croak "request_rate(): usage error";
-    }
-    if ( defined($args->{limit_to}) ) {
-        unless ( ref($args->{limit_to}) && ref($args->{limit_to}) eq 'ARRAY' ) {
-            croak "request_rate(): usage error. 'limit_to' should be of type ARRAY";
-        }
-    }
-    if ( defined $args->{exclude} ) {
-        unless ( ref($args->{exclude}) && ref($args->{exclude}) eq 'ARRAY' ) {
-            croak "request_rate(): usage error. 'exclude' has to be of type 'ARRAY'";
-        }
-    }
-    if ( $args->{exclude} && $args->{limit_to} ) {
-        croak "request_rate(): usage error. You cannot use both 'limit_to' and 'exclude' at the same time";
-    }
     unless (scalar(@$packages)) {
         return $self->set_error( "request_rate() was given an empty list of packages!" );
     }
 
-    for (my $i=0; $i < @$packages; $i++ ) {
-        $packages->[$i]->id( $i + 1 );
+    my $error;
+    my $response = try {
+        $self->{delegate}->request_rate({
+            from => $from,
+            to => $to,
+            packages => $packages,
+            %$args,
+        });
     }
-    my $cache_key = undef;
-    my $cache     = undef;
-    if ( defined($cache = $self->{__cache}) ) {
-        $cache_key = $self->generate_cache_key($from, $to, $packages, $args);
-        if ( my $services = $cache->thaw($cache_key) ) {
-            return $services;
+    catch {
+        warn "Caught: $_";
+        if ($_->can('error')) {
+            $error = $_->error->{ErrorDescription};
         }
-    }
-    my %data = (
-        RatingServiceSelectionRequest => {
-            Request => {
-                RequestAction   => 'Rate',
-                RequestOption   =>  $args->{mode},
-                TransactionReference => $self->transaction_reference,
-            },
-            PickupType  => {
-                Code    => PICKUP_TYPES->{$self->{__args}->{pickup_type}||"ONE_TIME"}
-            },
-            Shipment    => {
-                Service     => { Code   => Net::UPS::Service->new_from_label( $args->{service} )->code },
-                Package     => [map { $_->as_hash()->{Package} } @$packages],
-                Shipper     => $from->as_hash(),
-                ShipTo      => $to->as_hash()
-            }
-    });
-    if ( my $shipper_number = $self->{__args}->{ups_account_number} ) {
-        $data{RatingServiceSelectionRequest}->{Shipment}->{Shipper}->{ShipperNumber} = $shipper_number;
-    }
-    if (my $classification_code = $self->{__args}->{customer_classification} ) {
-        $data{RatingServiceSelectionRequest}->{CustomerClassification}->{Code} = CUSTOMER_CLASSIFICATION->{$classification_code};
-    }
-    my $xml         = $self->access_as_xml . XMLout(\%data, KeepRoot=>1, NoAttr=>1, KeyAttr=>[], XMLDecl=>1);
-    my $response    = XMLin( $self->post( $self->rate_proxy, $xml ),
-                                            KeepRoot => 0,
-                                            NoAttr => 1,
-                                            KeyAttr => [],
-                                            ForceArray => ['RatedPackage', 'RatedShipment']);
+        else {
+            $error = "$_";
+        }
+    };
+    return $self->set_error($error) if $error;
 
-    ##############################################################################
-    # Scoob correction Jan 2nd 2007 / cpan AT pickledbrain.com
-    #
-    # Changes to handle latest UPS xml service.  See this document for details:
-    #
-    # This new release of the document:
-    #    "UPS online tools
-    #     Rates and Service Selection - XML Programming Invormation
-    #     version 1.0,  Volume 7, number 1   rev date Dec 17th 2006"
-    #
-    #  Get it at:  http://www.ups.com/onlinetools  (registration required)
-    #
-    #  UPS just introduced two new errors codes (warning level):
-    #    ErrorCode:        110971
-    #    ErrorSeverity:    Warning
-    #    ErrorDescription: 'Your invoice may vary from the displayed reference rates'
-    #            AND
-    #    ErrorCode:        110920
-    #    ErrorSeverity:    Warning
-    #    ErrorDescription: 'Ship To address has been changed from (residential/commercial)
-    #                                    to (commercial/residential)'
-    #
-    #    The original code here did not handle any "warning" level
-    #    (there were no other cases of warning level errors prior to this)
-    #    and simply returned an error w/o the shipping rates.
-    #
-    #    The code change below simply ignore those two warnings as they are
-    #    essentially legal cover-your-ass and not all that useful here.
-    #
-    #####
-    # Ignore "Warning" level error
-    if ( my $error  =  $response->{Response}->{Error} ) {
-        unless ($error->{'ErrorSeverity'} eq 'Warning') {
-            return $self->set_error( $error->{ErrorDescription} );
-        }
-    }
+    my @services = map { to_OldService($_) } @{$response->services};
 
-    my @services;
-    for (my $i=0; $i < @{$response->{RatedShipment}}; $i++ ) {
-        my $ref = $response->{RatedShipment}->[$i] or die;
-        my $service = Net::UPS::Service->new_from_code($ref->{Service}->{Code});
-        $service->total_charges( $ref->{TotalCharges}->{MonetaryValue} );
-        $service->guaranteed_days(ref($ref->{GuaranteedDaysToDelivery}) ?
-                                                undef : $ref->{GuaranteedDaysToDelivery});
-        $service->rated_packages( $packages );
-        my @rates = ();
-        for (my $j=0; $j < @{$ref->{RatedPackage}}; $j++ ) {
-            push @rates, Net::UPS::Rate->new(
-                billing_weight  => $ref->{RatedPackage}->[$j]->{BillingWeight}->{Weight},
-                total_charges   => $ref->{RatedPackage}->[$j]->{TotalCharges}->{MonetaryValue},
-                weight          => $ref->{Weight},
-                rated_package   => $packages->[$j],
-                service         => $service,
-                from            => $from,
-                to              => $to
-            );
-        }
-        $service->rates(\@rates);
-        if ( (lc($args->{mode}) eq 'shop') && defined($cache) ) {
-            local ($args->{mode}, $args->{service});
-            $args->{mode} = 'rate';
-            $args->{service} = $service->label;
-            my $cache_key = $self->generate_cache_key($from, $to, $packages, $args);
-            $cache->freeze($cache_key, [$service]);
-        }
-        if ( $args->{limit_to} ) {
-            my $limit_ok = 0;
-            for ( @{$args->{limit_to}} ) {
-                ($_ eq $service->label) && $limit_ok++;
-            }
-            $limit_ok or next;
-        }
-        if ( $args->{exclude} ) {
-            my $exclude_ok = 0;
-            for ( @{$args->{exclude}} ) {
-                ($_ eq $service->label) && $exclude_ok++;
-            }
-            $exclude_ok and next;
-        }
-        push @services, $service;
-        $self->{__last_service} = $service;
+    $self->{last_service} = $services[-1];
 
-    }
-    if ( defined $cache ) {
-        $cache->freeze($cache_key, \@services);
-    }
     return \@services;
 }
 
-
-
-
-sub service {
-    return $_[0]->{__last_service};
-}
-
-
-sub post {
-    my $self = shift;
-    my ($url, $content) = @_;
-
-    unless ( $url && $content ) {
-        croak "post(): usage error";
-    }
-
-    my $user_agent  = LWP::UserAgent->new();
-    $user_agent->env_proxy;
-    my $request     = HTTP::Request->new('POST', $url);
-    $request->content( $content );
-    my $response    = $user_agent->request( $request );
-    if ( $response->is_error ) {
-        die $response->status_line();
-    }
-    return $response->content;
-}
-
-
-
+sub service { return $_[0]->{last_service} }
 
 sub validate_address {
     my $self    = shift;
@@ -441,90 +233,27 @@ sub validate_address {
 
     croak "verify_address(): usage error" unless defined($address);
 
-    unless ( ref $address ) {
-        $address = {postal_code => $address};
+    my $error;
+    my $response = try {
+        $self->{delegate}->validate_address(
+            $address,
+            ( defined $args->{tolerance} ? $args->{tolerance} : () ),
+        );
     }
-    if ( ref $address eq 'HASH' ) {
-        $address = Net::UPS::Address->new(%$address);
-    }
-    $args ||= {};
-    unless ( defined $args->{tolerance} ) {
-        $args->{tolerance} = 0.05;
-    }
-    unless ( ($args->{tolerance} >= 0) && ($args->{tolerance} <= 1) ) {
-        croak "validate_address(): invalid tolerance threshold";
-    }
-    my %data = (
-        AddressValidationRequest    => {
-            Request => {
-                RequestAction   => "AV",
-                TransactionReference => $self->transaction_reference(),
-            }
+    catch {
+        if ($_->can('error')) {
+            $error = $_->error->{ErrorDescription};
         }
-    );
-    if ( $address->city ) {
-        $data{AddressValidationRequest}->{Address}->{City} = $address->city;
-    }
-    if ( $address->state ) {
-        if ( length($address->state) != 2 ) {
-            croak "StateProvinceCode has to be two letters long";
+        else {
+            $error = "$_";
         }
-        $data{AddressValidationRequest}->{Address}->{StateProvinceCode} = $address->state;
-    }
-    if ( $address->postal_code ) {
-        $data{AddressValidationRequest}->{Address}->{PostalCode} = $address->postal_code;
-    }
-    my $xml = $self->access_as_xml . XMLout(\%data, KeepRoot=>1, NoAttr=>1, KeyAttr=>[], XMLDecl=>1);
-    my $response = XMLin($self->post($self->av_proxy, $xml),
-                                                KeepRoot=>0, NoAttr=>1,
-                                                KeyAttr=>[], ForceArray=>["AddressValidationResult"]);
-    if ( my $error = $response->{Response}->{Error} ) {
-        unless ($error->{'ErrorSeverity'} eq 'Warning') {
-            return $self->set_error( $error->{ErrorDescription} );
-        }
-    }
-    my @addresses = ();
-    for (my $i=0; $i < @{$response->{AddressValidationResult}}; $i++ ) {
-        my $ref = $response->{AddressValidationResult}->[$i];
-        next if $ref->{Quality} < (1 - $args->{tolerance});
-        while ( $ref->{PostalCodeLowEnd} <= $ref->{PostalCodeHighEnd} ) {
-            my $address = Net::UPS::Address->new(
-                quality         => $ref->{Quality},
-                postal_code     => $ref->{PostalCodeLowEnd},
-                city            => $ref->{Address}->{City},
-                state           => $ref->{Address}->{StateProvinceCode},
-                country_code    => "US"
-            );
-            push @addresses, $address;
-            $ref->{PostalCodeLowEnd}++;
-        }
-    }
+    };
+    return $self->set_error($error) if $error;
+
+    my @addresses = map { to_OldAddress($_) } @{$response->addresses};
+
     return \@addresses;
 }
-
-sub generate_cache_key {
-    my $self = shift;
-    my ($from, $to, $packages, $args) = @_;
-    unless ( $from && $to && $packages && ref($from) && ref($to) && ref($packages) ) {
-        croak "generate_cache_key(): usage error";
-    }
-    my @keys = ($from->cache_id, $to->cache_id);
-    for my $package ( @$packages ) {
-        push @keys, $package->cache_id;
-    }
-    for my $key ( sort keys %{$self->{__args}} ) {
-        push @keys, sprintf("%s:%s", lc $key, lc $self->{__args}->{$key} );
-    }
-    for my $key (sort keys %$args ) {
-        next if $key eq 'limit_to';
-        next if $key eq 'exclude';
-        push @keys, sprintf("%s:%s", lc $key, lc $args->{$key});
-    }
-    return join(":", @keys);
-}
-
-
-
 
 1;
 __END__

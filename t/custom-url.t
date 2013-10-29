@@ -10,23 +10,23 @@ print $fh <<'CONFIG';
 UPSUserID user
 UPSPassword pass
 UPSAccessKey accesskey
-UPSAVProxy http://my/av
-UPSRateProxy http://my/rate
+UPSAVProxy http://my/AV
+UPSRateProxy http://my/Rate
 CONFIG
 flush $fh;
 
 for my $ups (
     Net::UPS->new('user','pass','accesskey',{
-        av_proxy => 'http://my/av',
-        rate_proxy => 'http://my/rate',
+        av_proxy => 'http://my/AV',
+        rate_proxy => 'http://my/Rate',
     }),
     Net::UPS->new($filename),
 ) {
     is($ups->userid,'user','user set');
     is($ups->password,'pass','password set');
-    is($ups->av_proxy,'http://my/av',
+    is($ups->av_proxy,'http://my/AV',
        'AV url set');
-    is($ups->rate_proxy,'http://my/rate',
+    is($ups->rate_proxy,'http://my/Rate',
        'Rate url set');
 }
 
