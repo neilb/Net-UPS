@@ -2,6 +2,8 @@ Revision history for Perl extension Net::UPS.
 ==============================================
 
 {{$NEXT}}
+
+0.08 October 29, 2013
    * FIX RT #58402 added new Service Codes
 
 0.07 October 24, 2013
