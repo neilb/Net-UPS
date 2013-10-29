@@ -2,16 +2,34 @@
 use strict;
 use warnings;
 use 5.10.0;
+use lib 't/lib';
 use Test::Most;
 use Net::UPS2;
 use Net::UPS2::Package;
 use File::Spec;
 use Try::Tiny;
+use Sub::Override;
 use Data::Printer;
+use Test::Net::UPS2::TestCache;
 
+my $orig_post = \&Net::UPS2::post;
+my @calls;
+my $new_post = Sub::Override->new(
+    'Net::UPS2::post',
+    sub {
+        note "my post";
+        push @calls,[@_];
+        $orig_post->(@_);
+    }
+);
+
+my $cache = Test::Net::UPS2::TestCache->new();
 my $upsrc = File::Spec->catfile($ENV{HOME}, '.upsrc.conf');
 my $ups = try {
-    Net::UPS2->new($upsrc);
+    Net::UPS2->new({
+        config_file => $upsrc,
+        cache => $cache,
+    });
 }
 catch {
     plan(skip_all=>$_);
@@ -29,14 +47,25 @@ my $package =
 
 ok($package, 'packages can be created');
 
-my $services = $ups->request_rate({
+my $argpack = {
     from => 15241,
     to => 48823,
     packages => $package,
     mode => 'rate',
     service => 'GROUND',
-});
+};
 
+my $services = $ups->request_rate($argpack);
 ok($services && @$services,'got answer');
+cmp_deeply(\@calls,
+           [[ $ups,'/Rate',ignore() ]],
+           'one call to the service');
+
+my $services2 = $ups->request_rate($argpack);
+ok($services2 && @$services2,'got answer again');
+cmp_deeply($services2,$services,'the same answer');
+cmp_deeply(\@calls,
+           [[ $ups,'/Rate',ignore() ]],
+           'still only one call to the service');
 
 done_testing();

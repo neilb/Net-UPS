@@ -160,5 +160,15 @@ sub is_oversized {
     }
 }
 
+sub cache_id {
+    state $argcheck = compile(Object);
+    my ($self) = $argcheck->(@_);
+
+    return join ':',
+        $self->packaging_type,
+        $self->length, $self->width, $self->height,
+        $self->weight;
+}
+
 1;
 

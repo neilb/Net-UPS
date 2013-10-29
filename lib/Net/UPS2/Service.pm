@@ -83,4 +83,6 @@ sub name {
     return $name;
 }
 
+sub cache_id { return $_[0]->code }
+
 1;

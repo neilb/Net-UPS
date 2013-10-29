@@ -4,7 +4,7 @@ use warnings;
 use Type::Library
     -base,
     -declare => qw( PickupType CustomerClassification
-                    Cache UserAgent
+                    Cache Cacheable UserAgent
                     Address Package PackageList
                     RequestMode Service
                     ServiceCode ServiceLabel
@@ -157,6 +157,7 @@ coerce Service, from Str, via {
 
 
 duck_type Cache, [qw(get set)];
+duck_type Cacheable, [qw(cache_id)];
 duck_type UserAgent, [qw(request)];
 
 1;

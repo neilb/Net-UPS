@@ -89,4 +89,6 @@ sub as_hash {
     return \%data;
 }
 
+sub cache_id { return $_[0]->postal_code }
+
 1;

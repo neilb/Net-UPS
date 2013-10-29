@@ -84,7 +84,7 @@ has account_number => (
     isa => Str,
 );
 has customer_classification => (
-    is => 'ro',
+    is => 'rw',
     isa => CustomerClassification,
 );
 
@@ -194,7 +194,18 @@ sub request_rate {
     my $packages = $args->{packages};
     { my $pack_id=0; $_->id(++$pack_id) for @$packages }
 
-    # TODO here goes caching
+    my $cache_key = $self->generate_cache_key([
+        $args->{from},$args->{to},@$packages,
+    ],{
+        mode => $args->{mode},
+        service => $args->{service}->code,
+        pickup_type => $self->pickup_type,
+        customer_classification => $self->customer_classification,
+    });
+    if (my $cached_services = $self->cache->get($cache_key)) {
+        warn "returning cached version";
+        return $cached_services;
+    }
 
     my %request = (
         RatingServiceSelectionRequest => {
@@ -274,7 +285,7 @@ sub request_rate {
     }
     @services = sort { $a->total_charges <=> $b->total_charges } @services;
 
-    # TODO caching goes here
+    $self->cache->set($cache_key,\@services);
 
     # we should return warnings as well
     return \@services;
@@ -374,6 +385,7 @@ sub xml_request {
 }
 
 sub post {
+    warn "post";
     state $argcheck = compile( Object, Str, Str );
     my ($self, $url_suffix, $body) = $argcheck->(@_);
 
@@ -392,6 +404,20 @@ sub post {
     }
 
     return $response->decoded_content(default_charset=>'utf-8',raise_error=>1);
+}
+
+sub generate_cache_key {
+    state $argcheck = compile(Object, ArrayRef[Cacheable],Optional[HashRef]);
+    my ($self,$things,$args) = $argcheck->(@_);
+
+    return join ':',
+        ( map { $_->cache_id } @$things ),
+        ( map {
+            sprintf '%s:%s',
+                $_,
+                ( defined($args->{$_}) ? '"'.$args->{$_}.'"' : 'undef' )
+            } sort keys %{$args || {}}
+        );
 }
 
 1;
