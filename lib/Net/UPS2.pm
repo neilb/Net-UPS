@@ -97,20 +97,10 @@ has pickup_type => (
     default => sub { 'ONE_TIME' },
 );
 
-
 has cache => (
-    is => 'lazy',
+    is => 'ro',
     isa => Cache|Undef,
 );
-sub _build_cache {
-    require CHI;
-    require File::Spec;
-    return CHI->new(
-        driver => 'File',
-        root_dir => File::Spec->catdir(File::Spec->tmpdir,'net_ups2'),
-        depth => 5,
-    );
-}
 sub does_caching {
     my ($self) = @_;
     return defined $self->cache;
@@ -146,6 +136,21 @@ sub BUILDARGS {
             %{_load_config_file($config_file)},
             %$ret,
         };
+    }
+
+    if ($ret->{cache_life}) {
+        require CHI;
+        if (not $ret->{cache_root}) {
+            require File::Spec;
+            $ret->{cache_root} =
+                File::Spec->catdir(File::Spec->tmpdir,'net_ups2'),
+              }
+        $ret->{cache} = CHI->new(
+            driver => 'File',
+            root_dir => $ret->{cache_root},
+            depth => 5,
+            expires_in => $ret->{cache_life} . ' min',
+        );
     }
 
     return $ret;
