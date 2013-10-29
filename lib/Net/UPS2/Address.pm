@@ -3,12 +3,12 @@ use strict;
 use warnings;
 use Moo;
 use 5.10.0;
-use Types::Standard qw(Str Int Bool);
+use Types::Standard qw(Str Int Bool StrictNum);
 use Net::UPS2::Types ':types';
 
 has quality => (
     is => 'ro',
-    isa => Int,
+    isa => StrictNum,
     required => 0,
 );
 
@@ -42,7 +42,7 @@ has is_residential => (
     required => 0,
 );
 
-sub is_match {
+sub is_exact_match {
     my $self = shift;
     return unless $self->quality();
     return ($self->quality == 1);

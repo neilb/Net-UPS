@@ -280,6 +280,54 @@ sub request_rate {
     return \@services;
 }
 
+sub validate_address {
+    state $argcheck = compile(
+        Object,
+        Address, Optional[Tolerance],
+    );
+    my ($self,$address,$tolerance) = $argcheck->(@_);
+
+    $tolerance //= 0.05;
+
+    my %data = (
+        AddressValidationRequest => {
+            Request => {
+                RequestAction => "AV",
+                TransactionReference => $self->transaction_reference(),
+            },
+            Address => {
+                ( $address->city ? ( City => $address->city ) : () ),
+                ( $address->state ? ( StateProvinceCode => $address->state) : () ),
+                ( $address->postal_code ? ( PostalCode => $address->postal_code) : () ),
+            },
+        },
+    );
+
+    my $response = $self->xml_request({
+        data => \%data,
+        url_suffix => '/AV',
+        XMLin => {
+            ForceArray => [ 'AddressValidationResult' ],
+        },
+    });
+
+    my @addresses;
+    for my $address (@{$response->{AddressValidationResult}}) {
+        next if $address->{Quality} < (1 - $tolerance);
+        for my $possible_postal_code ($address->{PostalCodeLowEnd} .. $address->{PostalCodeHighEnd}) {
+            push @addresses, Net::UPS2::Address->new({
+                quality         => $address->{Quality},
+                postal_code     => $possible_postal_code,
+                city            => $address->{Address}->{City},
+                state           => $address->{Address}->{StateProvinceCode},
+                country_code    => "US",
+            });
+        }
+    }
+
+    return \@addresses;
+}
+
 sub xml_request {
     state $argcheck = compile(
         Object,

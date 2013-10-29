@@ -10,6 +10,7 @@ use Type::Library
                     ServiceCode ServiceLabel
                     PackagingType MeasurementSystem
                     Measure MeasurementUnit Currency
+                    Tolerance
               );
 use Type::Utils -all;
 use Types::Standard -types;
@@ -124,6 +125,18 @@ declare Measure,
         return $perlcode;
     },
     message { ($_//'<undef>').' is not a valid measure, it must be a non-negative number' };
+
+declare Tolerance,
+    as StrictNum,
+    where { $_ >= 0 && $_ <= 1 },
+    inline_as {
+        my ($constraint, $varname) = @_;
+        my $perlcode =
+            $constraint->parent->inline_check($varname)
+                . "&& ($varname >= 0 && $varname <= 1)";
+        return $perlcode;
+    },
+    message { ($_//'<undef>').' is not a valid tolerance, it must be a number between 0 and 1' };
 
 class_type Address, { class => 'Net::UPS2::Address' };
 coerce Address, from Str, via {
