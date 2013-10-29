@@ -46,7 +46,6 @@ for my $d (@data) {
         } qr/\bnot supported\b/,"$comment - expected failure";
     }
     else {
-        my $p = Net::UPS::Package->new(%$d);
         is($p->is_oversized,$oversized,
            "$comment - expected oversized class");
     }
