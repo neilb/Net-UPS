@@ -203,7 +203,6 @@ sub request_rate {
         customer_classification => $self->customer_classification,
     });
     if (my $cached_services = $self->cache->get($cache_key)) {
-        warn "returning cached version";
         return $cached_services;
     }
 
@@ -385,7 +384,6 @@ sub xml_request {
 }
 
 sub post {
-    warn "post";
     state $argcheck = compile( Object, Str, Str );
     my ($self, $url_suffix, $body) = $argcheck->(@_);
 
