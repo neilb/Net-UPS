@@ -3,7 +3,7 @@ use strict;
 use warnings;
 use Moo;
 use XML::Simple;
-use Types::Standard qw(Str Bool Object Dict Optional ArrayRef HashRef);
+use Types::Standard qw(Str Bool Object Dict Optional ArrayRef HashRef Undef);
 use Type::Params qw(compile);
 use Net::UPS2::Types qw(:types to_Service);
 use Net::UPS2::Exception;
@@ -100,7 +100,7 @@ has pickup_type => (
 
 has cache => (
     is => 'lazy',
-    isa => Cache,
+    isa => Cache|Undef,
 );
 sub _build_cache {
     require CHI;
@@ -110,6 +110,10 @@ sub _build_cache {
         root_dir => File::Spec->catdir(File::Spec->tmpdir,'net_ups2'),
         depth => 5,
     );
+}
+sub does_caching {
+    my ($self) = @_;
+    return defined $self->cache;
 }
 
 has user_agent => (
@@ -197,18 +201,21 @@ sub request_rate {
     my $packages = $args->{packages};
     { my $pack_id=0; $_->id(++$pack_id) for @$packages }
 
-    my $cache_key = $self->generate_cache_key(
-        'rate',
-        [ $args->{from},$args->{to},@$packages, ],
-        {
-            mode => $args->{mode},
-            service => $args->{service}->code,
-            pickup_type => $self->pickup_type,
-            customer_classification => $self->customer_classification,
-        },
-    );
-    if (my $cached_services = $self->cache->get($cache_key)) {
-        return $cached_services;
+    my $cache_key;
+    if ($self->does_caching) {
+        $cache_key = $self->generate_cache_key(
+            'rate',
+            [ $args->{from},$args->{to},@$packages, ],
+            {
+                mode => $args->{mode},
+                service => $args->{service}->code,
+                pickup_type => $self->pickup_type,
+                customer_classification => $self->customer_classification,
+            },
+        );
+        if (my $cached_services = $self->cache->get($cache_key)) {
+            return $cached_services;
+        }
     }
 
     my %request = (
@@ -294,7 +301,7 @@ sub request_rate {
         ( $response->{Error} ? (warnings => $response->{Error}) : () ),
     });
 
-    $self->cache->set($cache_key,$ret);
+    $self->cache->set($cache_key,$ret) if $self->does_caching;
 
     return $ret;
 }
@@ -322,13 +329,16 @@ sub validate_address {
         },
     );
 
-    my $cache_key = $self->generate_cache_key(
-        'AV',
-        [ $address ],
-        { tolerance => $tolerance },
-    );
-    if (my $cached_services = $self->cache->get($cache_key)) {
-        return $cached_services;
+    my $cache_key;
+    if ($self->does_caching) {
+        $cache_key = $self->generate_cache_key(
+            'AV',
+            [ $address ],
+            { tolerance => $tolerance },
+        );
+        if (my $cached_services = $self->cache->get($cache_key)) {
+            return $cached_services;
+        }
     }
 
     my $response = $self->xml_request({
@@ -359,7 +369,7 @@ sub validate_address {
         ( $response->{Error} ? (warnings => $response->{Error}) : () ),
     });
 
-    $self->cache->set($cache_key,$ret);
+    $self->cache->set($cache_key,$ret) if $self->does_caching;
 
     return $ret;
 }

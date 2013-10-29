@@ -72,5 +72,16 @@ cmp_deeply(\@calls,
            [[ $ups,'/AV',ignore() ]],
            'still only one call to the service');
 
+$ups = Net::UPS2->new({
+    config_file => $upsrc,
+    cache => undef, # disable caching
+});
+my $addresses3 = $ups->validate_address($address);
+cmp_deeply($addresses3,$addresses,'the same answer');
+cmp_deeply(\@calls,
+           [[ ignore(),'/AV',ignore() ],
+            [ $ups,'/AV',ignore() ]],
+           'two calls to the service');
+
 done_testing();
 
