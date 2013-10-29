@@ -5,7 +5,7 @@ use Moo;
 use XML::Simple;
 use Types::Standard qw(Str Bool Object Dict Optional ArrayRef HashRef);
 use Type::Params qw(compile);
-use Net::UPS2::Types ':types';
+use Net::UPS2::Types qw(:types to_Service);
 use Net::UPS2::Exception;
 use Try::Tiny;
 use List::AllUtils 'pairwise';
@@ -184,10 +184,12 @@ sub request_rate {
         packages => PackageList,
         limit_to => Optional[ArrayRef[Str]],
         exclude => Optional[ArrayRef[Str]],
-        mode => RequestMode,
-        service => Service,
+        mode => Optional[RequestMode],
+        service => Optional[Service],
     ]);
     my ($self,$args) = $argcheck->(@_);
+    $args->{mode} ||= 'rate';
+    $args->{service} ||= to_Service('GROUND');
 
     my $packages = $args->{packages};
     { my $pack_id=0; $_->id(++$pack_id) for @$packages }
@@ -270,6 +272,7 @@ sub request_rate {
             } @{$rated_shipment->{RatedPackage}},@$packages ],
         );
     }
+    @services = sort { $a->total_charges <=> $b->total_charges } @services;
 
     # TODO caching goes here
 
